@@ -5,5 +5,5 @@ export const PATHS = {
   scenePreset: "/assets/scene/designer-scene.vjson",
   gemEnvironment: "/assets/scene/gem-000.hdr",
   lightmap: "/assets/scene/lightmap-r-2b.hdr",
-  vendorBundle: "/vendor/engine-0.8.0/bundle-0.8.0.mjs",
+  vendorBundle: "/shaders/bundle-0.8.0.mjs",
 } as const;
