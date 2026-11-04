@@ -1,0 +1,9 @@
+// Stage: fragment. Used by: Bevel-aware normal smoothing (template).
+// Source: public/shaders/bundle-0.8.0.mjs, character offset 1575427. Body copied unchanged.
+            ${i}
+
+            ${Ca}
+
+            uniform sampler2D tNormalBuffer;uniform sampler2D edgeMaskBuffer;uniform vec2 screenSize;const float depthStep=0.02;uniform vec2 samples[NUM_SAMPLES];uniform vec3 cameraPositionWorld;varying vec2 vUv;
+#include <common>
+float getBevelRadius(in float number){return floor(number/8.);}vec3 smoothNormal(){vec2 uv=gl_FragCoord.xy/screenSize;vec4 texel=texture2D(tNormalDepth,uv);vec4 edgeMask=texture2D(edgeMaskBuffer,uv);vec3 avgNormal=2.*texture2D(tNormalBuffer,uv).rgb-1.;float depth=pow(unpack16(texel.xy),2.);vec2 invScreenSize=vec2(1.)/screenSize;vec4 mask=texture2D(tGBufferFlags,uv);float weightSum=0.;float radius=getBevelRadius(mask.g*255.)*2.;float randomAngle=6.2*random(frameCount*0.1);float theta=randomAngle;float snTheta=sin(theta);float csTheta=cos(theta);mat2 randomRotationMatrix=mat2(csTheta,snTheta,-snTheta,csTheta);float d_=dot(cameraPositionWorld,cameraPositionWorld);float radiusModifier=clamp(1./(1.+pow(d_,0.5)),0.,1.);for(int i=0;i<5;i++){float x=float(i)-2.;for(int j=0;j<5;j++){float y=float(j)-2.;vec2 offset=randomRotationMatrix*vec2(x,y)*radius*radiusModifier*invScreenSize;vec4 texel=texture2D(tNormalDepth,uv+offset);float offsetDepth=pow(unpack16(texel.xy),2.);float depthWeight=abs(offsetDepth-depth);depthWeight=(1.-step(depthStep,depthWeight));vec3 offsetNormal=2.*texture2D(tNormalBuffer,uv+offset).rgb-1.;if(dot(offsetNormal,offsetNormal)>0.){avgNormal+=offsetNormal*depthWeight;}}}return normalize(avgNormal);}void main(){vec2 uv=gl_FragCoord.xy/screenSize;vec4 edgeMask=texture2D(edgeMaskBuffer,uv);vec3 normal=vec3(0.);if(edgeMask.x>0.){normal=smoothNormal();}else{normal=2.*texture2D(tNormalBuffer,uv).rgb-1.;}gl_FragColor=vec4(vec3(0.5*normal+0.5),1.);}

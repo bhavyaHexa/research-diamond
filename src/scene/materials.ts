@@ -1,6 +1,7 @@
 import type { GemKey, MetalKey, MetalSpec, GemSpec } from "../types";
 import type { Viewer } from "../vendor";
 import { slug } from "../utils";
+import { DIAMOND_PASSES } from "../shaders/pipeline";
 
 // Stone node names that get the white-diamond treatment (halo D4xxx, centre D5).
 // Ruby band stones (D1xxx) stay as authored.
@@ -22,6 +23,28 @@ export const GEMS: Record<GemKey, GemSpec> = {
 
 export const DEFAULT_METAL: MetalKey = "yellow";
 export const DEFAULT_GEM: GemKey = "white";
+
+// The stone GLSL comes from src/shaders/pipeline.ts. The engine still sets the uniforms and
+// runs the frame, so only the shader text is replaced.
+function useDiamondSource(material: Viewer) {
+  const { vertex, fragment } = DIAMOND_PASSES.diamond;
+  if (!material.isDiamondMaterial || material.fragmentShader === fragment.source) return;
+  material.vertexShader = vertex.source;
+  material.fragmentShader = fragment.source;
+  material.needsUpdate = true;
+}
+
+// The facet-normal capture pass draws with one material owned by the diamond plugin.
+// Call it after the plugins are added and before the ring loads, because the loader
+// captures the normal maps as it imports the model.
+export function useCaptureSource(viewer: Viewer) {
+  const material = viewer.plugins.Diamond._normalCapture?._mesh?.material;
+  const { vertex, fragment } = DIAMOND_PASSES.normalCapture;
+  if (!material || material.fragmentShader === fragment.source) return;
+  material.vertexShader = vertex.source;
+  material.fragmentShader = fragment.source;
+  material.needsUpdate = true;
+}
 
 // Converts matching stones to the diamond shader. Each material is converted once,
 // then every mesh gets its facet normal map (required even after makeDiamond).
@@ -52,6 +75,7 @@ export function whitenDiamonds(viewer: Viewer, model: Viewer) {
         },
       );
     }
+    useDiamondSource(o.material);
     viewer.plugins.Diamond.prepareDiamondMesh(o, { cacheKey, normalMapRes: 512 });
   });
 }

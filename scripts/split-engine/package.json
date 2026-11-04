@@ -1,0 +1,9 @@
+{
+  "name": "split-engine",
+  "private": true,
+  "type": "module",
+  "description": "Splits the engine bundle (from git history) into feature bundles under src/engine/.",
+  "dependencies": {
+    "acorn": "^8.15.0"
+  }
+}
