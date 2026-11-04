@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hexa Jewelry Viewer</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='20.5' r='9' fill='none' stroke='%237a5418' stroke-width='5'/%3E%3Ccircle cx='16' cy='20.5' r='9' fill='none' stroke='%23e8b34b' stroke-width='3'/%3E%3Cpath d='M11 1.5h10l3.5 4L16 12 7.5 5.5z' fill='%23eef6ff' stroke='%235b6b80' stroke-width='1.2' stroke-linejoin='round'/%3E%3Cpath d='M7.5 5.5h17M13 5.5 16 12l3-6.5' fill='none' stroke='%239fb3c8' stroke-width='0.9'/%3E%3C/svg%3E"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #1f1d24;
+        --muted: #6b6775;
+        --gold: #c8962e;
+        --line: #ececef;
+        --shadow: 0 2px 10px rgba(20, 16, 30, 0.07);
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        display: flex;
+        font-family: Montserrat, system-ui, sans-serif;
+        background: #fff;
+        color: var(--ink);
+      }
+      #stage-div {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+      }
+      #stage-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        /* Touches rotate/zoom the ring; never scroll or zoom the page */
+        touch-action: none;
+      }
+      /* Loading screen: covers the viewer until the ring's first frames are drawn */
+      .loader {
+        position: absolute;
+        inset: 0;
+        z-index: 3;
+        display: grid;
+        place-items: center;
+        background: #fff;
+        transition:
+          opacity 0.6s ease,
+          visibility 0.6s;
+      }
+      .loader.done {
+        opacity: 0;
+        visibility: hidden;
+      }
+      .loader-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: min(280px, 80%);
+        text-align: center;
+      }
+      .loader-icon {
+        width: 76px;
+        height: 76px;
+        margin-bottom: 18px;
+        animation: loader-float 2.4s ease-in-out infinite;
+      }
+      .loader-glint {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: loader-glint 2.4s ease-in-out infinite;
+      }
+      @keyframes loader-float {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-6px);
+        }
+      }
+      @keyframes loader-glint {
+        0%,
+        55%,
+        100% {
+          opacity: 0;
+          transform: scale(0.3) rotate(0deg);
+        }
+        72% {
+          opacity: 1;
+          transform: scale(1) rotate(45deg);
+        }
+      }
+      .loader-title {
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      .loader-step {
+        min-height: 1.4em;
+        margin-top: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .loader-bar {
+        width: 100%;
+        height: 4px;
+        margin-top: 16px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #f1ede6;
+      }
+      .loader-fill {
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #e8c070, var(--gold));
+        transition: width 0.25s ease-out;
+      }
+      .loader-pct {
+        margin-top: 8px;
+        font-size: 12px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .loader-retry,
+      .auth-submit {
+        margin-top: 18px;
+        padding: 9px 22px;
+        border: none;
+        border-radius: 999px;
+        background: var(--gold);
+        color: #fff;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .loader-retry:focus-visible,
+      .auth-submit:focus-visible {
+        outline: 2px solid var(--gold);
+        outline-offset: 3px;
+      }
+      .loader.error .loader-icon,
+      .loader.error .loader-glint {
+        animation: none;
+        opacity: 0.4;
+      }
+      .loader.error .loader-fill {
+        background: #d9534f;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .loader-icon,
+        .loader-glint {
+          animation: none;
+        }
+        .loader-glint {
+          opacity: 0;
+        }
+      }
+
+      /* Access gate: shown instead of the viewer until the right key is entered */
+      body.locked #stage-div,
+      body.locked .panel {
+        display: none;
+      }
+      .auth {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: grid;
+        place-items: center;
+        margin: 0;
+        background: #fff;
+      }
+      .auth[hidden] {
+        display: none;
+      }
+      .auth-input {
+        box-sizing: border-box;
+        width: 100%;
+        margin-top: 20px;
+        padding: 11px 18px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fff;
+        color: var(--ink);
+        font: inherit;
+        font-size: 14px;
+        text-align: center;
+      }
+      .auth-input:focus-visible {
+        outline: 2px solid var(--gold);
+        outline-offset: 2px;
+      }
+      .auth-submit:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      .auth-error {
+        min-height: 1.4em;
+        margin-top: 12px;
+        font-size: 13px;
+        color: #d9534f;
+      }
+
+      /* Options panel */
+      .panel {
+        box-sizing: border-box;
+        width: 400px;
+        flex-shrink: 0;
+        margin: 32px 32px 32px 0;
+        padding: 32px 28px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        box-shadow: 0 10px 40px rgba(20, 16, 30, 0.08);
+        opacity: 0.5;
+        pointer-events: none;
+        transition: opacity 0.4s;
+      }
+      .panel.ready {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .section-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 0 0 20px;
+        font-size: 19px;
+        font-weight: 500;
+      }
+      .section-title svg {
+        width: 26px;
+        height: 26px;
+        flex-shrink: 0;
+      }
+      .divider {
+        height: 1px;
+        margin: 28px 0;
+        background: var(--line);
+      }
+
+      /* Diamond tiles */
+      .gems {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+      .gem {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 0;
+        border: none;
+        background: none;
+        font: inherit;
+        font-size: 14px;
+        line-height: 1.3;
+        text-align: center;
+        color: var(--ink);
+        cursor: pointer;
+      }
+      .gem-tile {
+        position: relative;
+        box-sizing: border-box;
+        display: grid;
+        place-items: center;
+        width: 100%;
+        aspect-ratio: 1;
+        border: 2px solid transparent;
+        border-radius: 18px;
+        background: #fff;
+        box-shadow: var(--shadow);
+        transition:
+          border-color 0.15s,
+          transform 0.15s;
+      }
+      .gem-tile svg {
+        width: 52%;
+        height: auto;
+        filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.12));
+      }
+      .gem:hover .gem-tile {
+        transform: translateY(-2px);
+      }
+      .gem[aria-pressed="true"] .gem-tile {
+        border-color: var(--gold);
+      }
+      .gem-check {
+        position: absolute;
+        top: -9px;
+        right: -9px;
+        display: none;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border: 2px solid #fff;
+        border-radius: 50%;
+        background: var(--gold);
+      }
+      .gem[aria-pressed="true"] .gem-check {
+        display: grid;
+      }
+      .gem:focus-visible {
+        outline: none;
+      }
+      .gem:focus-visible .gem-tile {
+        outline: 2px solid var(--gold);
+        outline-offset: 3px;
+      }
+
+      /* Gold tiles: same tiles as the diamonds, with a polished metal ball */
+      .metal-ball {
+        width: 46%;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        background: var(--sphere);
+        box-shadow:
+          inset 0 -2px 4px rgba(0, 0, 0, 0.18),
+          0 2px 4px rgba(0, 0, 0, 0.18);
+      }
+
+      /* Phones: one screen, no page scroll. Viewer fills the space above a compact panel */
+      @media (max-width: 820px) {
+        html,
+        body {
+          overflow: hidden;
+          overscroll-behavior: none;
+        }
+        body {
+          flex-direction: column;
+          height: 100vh;
+          height: 100dvh; /* visible height, excluding mobile browser bars */
+        }
+        #stage-div {
+          flex: 1;
+          min-height: 0;
+        }
+        .panel {
+          flex-shrink: 0;
+          width: auto;
+          margin: 0 12px 12px;
+          padding: 14px 14px 12px;
+          border-radius: 20px;
+        }
+        .section-title {
+          gap: 8px;
+          margin-bottom: 10px;
+          font-size: 15px;
+        }
+        .section-title svg {
+          width: 20px;
+          height: 20px;
+        }
+        .divider {
+          margin: 12px 0;
+        }
+        .gems {
+          gap: 8px;
+        }
+        .gem {
+          gap: 6px;
+          font-size: 12px;
+        }
+        .gem-tile {
+          width: 60px;
+          border-radius: 14px;
+        }
+        .gem-check {
+          top: -6px;
+          right: -6px;
+          width: 18px;
+          height: 18px;
+        }
+        .gem-check svg {
+          width: 9px;
+          height: 9px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage-div">
+      <canvas id="stage-canvas"></canvas>
+    </div>
+
+    <script type="module">
+      // User ring — engine-authored file (diamond materials baked in).
+      // Rendered raw: as-authored materials, no pipeline override.
+      const RING = {
+        url: "./assets/Ring_v1.glb",
+        // Authored white-diamond materials (halo D4xxx + center D5) render dark under
+        // this viewer config (they expect the authoring tool's LUT pipeline) - whiten them with the
+        // white-diamond DiamondPlugin treatment. Ruby band stones (D1xxx) stay as-authored.
+        whiten: /^d(4\d{3}|5)$/,
+      };
+      // Render quality (displayCanvasScaling): higher is sharper but slower.
+      const QUALITY = 1.5;
+      // Default metal and diamond appearance.
+      const DEFAULT_METAL = "yellow";
+      const DEFAULT_GEM = "white";
+      // Camera zoom limits: distance from the ring centre (the ring is ~3 units
+      // tall; the page opens at ~7.7). min = closest zoom-in, max = furthest zoom-out.
+      const ZOOM = { min: 6.5, max: 15.6 };
+      // Camera intro: starts at `from`, circles the ring centre
+      // (shortest way round) to `to`, easing distance and height on the way.
+      // Positions are world x, y, z; duration in ms.
+      const CAMERA_INTRO = {
+        from: [11.12, 7.38, -8.08],
+        to: [-6.51, 7.65, -2.74],
+        duration: 2800,
+      };
+      // Yellow is Ring_v1's authored M1 material.
+      const METALS = {
+        yellow: {
+          color: [0.7835377915215659, 0.450785782828426, 0.1844749944900301],
+          roughness: 0,
+          ior: 1.5,
+        },
+      };
+      // White matches the whitening treatment below.
+      const GEMS = {
+        white: { color: "#e4e4e4", absorption: 1, boost: 2 },
+      };
+
+      try {
+        const W = await import("./vendor/engine-0.8.0/bundle-0.8.0.mjs");
+
+        // Viewer setup (scene preset, HDR envs, DiamondPlugin).
+        const viewer = new W.ViewerApp({
+          canvas: document.getElementById("stage-canvas"),
+          useRgbm: true,
+        });
+        window.viewer = viewer;
+        const manager = await viewer.addPlugin(W.AssetManagerPlugin);
+        await W.addBasePlugins(viewer);
+        viewer.renderer.refreshPipeline();
+        viewer.getPlugin(W.FrameFadePlugin).fadeOnSceneUpdate = false;
+        viewer.scene.addEventListener("sceneUpdate", () =>
+          viewer.getPlugin(W.FrameFadePlugin).startTransition(0),
+        );
+        await viewer.addPlugin(W.SimpleTextPlugin);
+
+        // The ring loads before the scene settings: Ring_v1.glb embeds its own viewer
+        // config (WEBGI_viewer: environment, gem env, camera controls, SSAO, bloom,
+        // tonemap) that is applied when the model is added to the scene. Everything
+        // after this step overrides it, so the scene preset and the values below win.
+        const model = (
+          await viewer.plugins.AssetManager.addFromPath(RING.url, {
+            pseudoCenter: false,
+            autoCenter: false,
+            autoScale: false,
+          })
+        )[0];
+        // Oversize guard for exports left ~10x too big (e.g. missing their scale):
+        // bbox half-size >= 5 → scale to 0.1. Ring_v1 reaches ~1.5 (about 3 units tall).
+        const bbox = new W.Box3().expandByObject(model.modelObject);
+        if (bbox.max.x >= 5 || bbox.max.y >= 5)
+          model.modelObject.scale.set(0.1, 0.1, 0.1);
+
+        await manager.importer.importSinglePath(
+          "./assets/scene/designer-scene.vjson",
+          { processImported: true },
+        );
+        // The GLB's own gem env (an EXR that isn't shipped) binds as an empty 0x0
+        // image, which renders transmission-0 diamonds black - replace it.
+        const gemEnv = await manager.importer.importSinglePath(
+          "./assets/scene/gem-000.hdr",
+        );
+        viewer.plugins.Diamond.envMap = gemEnv;
+        await viewer.scene.setEnvironment(
+          await manager.importer.importSinglePath(
+            "./assets/scene/lightmap-r-2b.hdr",
+          ),
+        );
+        viewer.scene.environment.rotation = 2;
+        viewer.plugins.Ground.shadowBaker.groundMapMode = "map";
+        viewer.plugins.Ground.groundReflection = false;
+        viewer.plugins.Ground.material.transparent = true;
+        viewer.plugins.Ground.material.roughness = 1;
+        viewer.plugins.Tonemap.config.tonemapBackground = false;
+        viewer.plugins.Ground.tonemapGround = false;
+        const controls = viewer.scene.activeCamera.controls;
+        controls.enablePan = true;
+        controls.rotateSpeed = 2;
+        controls.maxPolarAngle = Math.PI / 2;
+        controls.minPolarAngle = -0.001;
+        viewer.getPlugin("SSReflection").passes.ssr.passObject.lowQualityFrames = 0;
+        viewer.plugins.SSAO.passes.ssao.passObject.parameters.intensity = 0.1;
+
+        // Stone whitening: apply the white-diamond DiamondPlugin treatment to nodes
+        // matching RING.whiten (slugified names); everything else stays as-authored.
+        const slg = (s) =>
+          (s || "")
+            .toString()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/(^-|-$)/g, "");
+        const converted = new Set();
+        model.modelObject.traverse((o) => {
+          if (!o.isMesh || !o.material) return;
+          if (!slg(o.name).match(RING.whiten)) return;
+          const cacheKey = "whitened-" + slg(o.name).replace(/[0-9]/g, "");
+          const key = o.material.uuid || cacheKey;
+          if (!converted.has(key)) {
+            converted.add(key);
+            viewer.plugins.Diamond.makeDiamond(
+              o.material,
+              { normalMapRes: 512, cacheKey: cacheKey },
+              {
+                isDiamond: true,
+                color: 0xe4e4e4,
+                refractiveIndex: 2.42,
+                envMapIntensity: 1.6,
+                dispersion: 0.004,
+                absorptionFactor: 1,
+                gammaFactor: 1.09,
+                boostFactors: { x: 2, y: 2, z: 2, isVector3: true },
+                transmission: 0,
+                reflectivity: 0.46,
+                rayBounces: 6,
+              },
+            );
+          }
+          // Per-geometry facet normal-map bake — required for the diamond shader
+          // (makeDiamond alone only preps meshes it tracks itself).
+          viewer.plugins.Diamond.prepareDiamondMesh(o, {
+            cacheKey: cacheKey,
+            normalMapRes: 512,
+          });
+        });
+
+        // Metal materials (fully metallic, non-diamond) and diamond materials (all stones).
+        const metalMats = new Set();
+        const gemMats = new Set();
+        model.modelObject.traverse((o) => {
+          if (!o.isMesh || !o.material) return;
+          if (o.material.isDiamondMaterial) gemMats.add(o.material);
+          else if (o.material.metalness === 1) metalMats.add(o.material);
+        });
+        const setMetal = (key) => {
+          const p = METALS[key];
+          for (const mat of metalMats) {
+            mat.color.fromArray(p.color);
+            mat.roughness = p.roughness;
+            mat.metalness = 1;
+            mat.ior = p.ior;
+            mat.needsUpdate = true;
+          }
+          viewer.setDirty();
+        };
+        // Every stone gets the same diamond settings, so all of them change together.
+        const setGem = (key) => {
+          const g = GEMS[key];
+          for (const mat of gemMats) {
+            mat.color.set(g.color);
+            mat.absorptionFactor = g.absorption;
+            mat.uniforms.boostFactors.value.set(g.boost, g.boost, g.boost);
+            mat.transmission = 0;
+            mat.refractiveIndex = 2.42;
+            mat.envMapIntensity = 1.6;
+            mat.gammaFactor = 1.09;
+            mat.reflectivity = 0.46;
+            // Match the whitened stones, so the as-authored band stones get the same fire.
+            mat.rayBounces = 6;
+            mat.dispersion = 0.004;
+            mat.needsUpdate = true;
+            mat.setDirty?.();
+          }
+          viewer.setDirty();
+        };
+
+        setGem(DEFAULT_GEM);
+        setMetal(DEFAULT_METAL);
+
+        // Orbit around the ring's centre: the scene preset's camera target is off-centre,
+        // so shift target and camera by the same offset (same opening view and distance).
+        const cam = viewer.scene.activeCamera;
+        const ringCenter = new W.Box3()
+          .setFromObject(model.modelObject)
+          .getCenter(new W.Vector3());
+        const offset = ringCenter.clone().sub(cam.controls.target);
+        cam.position = cam.cameraObject.position.clone().add(offset);
+        cam.target = ringCenter.clone();
+        cam.setDirty?.();
+
+        // Zoom limits go after the ring loads: the GLB's embedded viewer config resets
+        // the camera controls when it is applied, so earlier values would be overwritten.
+        viewer.scene.activeCamera.controls.minDistance = ZOOM.min;
+        viewer.scene.activeCamera.controls.maxDistance = ZOOM.max;
+
+        // Camera intro: orbit (spherical coordinates around the ring centre) from
+        // CAMERA_INTRO.from to CAMERA_INTRO.to. Input is off while it plays.
+        const toOrbit = ([x, y, z]) => {
+          const v = new W.Vector3(x, y, z).sub(ringCenter);
+          const r = v.length();
+          return { r, theta: Math.atan2(v.x, v.z), phi: Math.acos(v.y / r) };
+        };
+        const orbitPoint = ({ r, theta, phi }) =>
+          new W.Vector3(
+            r * Math.sin(phi) * Math.sin(theta),
+            r * Math.cos(phi),
+            r * Math.sin(phi) * Math.cos(theta),
+          ).add(ringCenter);
+        const introFrom = toOrbit(CAMERA_INTRO.from);
+        const introTo = toOrbit(CAMERA_INTRO.to);
+        let introTurn = introTo.theta - introFrom.theta;
+        introTurn = Math.atan2(Math.sin(introTurn), Math.cos(introTurn)); // shortest way round
+        const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+        const setCamera = (orbit) => {
+          cam.position = orbitPoint(orbit);
+          cam.setDirty?.();
+          viewer.setDirty();
+        };
+        const playCameraIntro = () =>
+          new Promise((resolve) => {
+            if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+              setCamera(introTo);
+              return resolve();
+            }
+            cam.controls.enabled = false;
+            const start = performance.now();
+            const frame = (now) => {
+              const t = Math.min(1, (now - start) / CAMERA_INTRO.duration);
+              const k = easeInOut(t);
+              setCamera({
+                r: introFrom.r + (introTo.r - introFrom.r) * k,
+                theta: introFrom.theta + introTurn * k,
+                phi: introFrom.phi + (introTo.phi - introFrom.phi) * k,
+              });
+              if (t < 1) requestAnimationFrame(frame);
+              else {
+                cam.controls.enabled = true;
+                resolve();
+              }
+            };
+            requestAnimationFrame(frame);
+          });
+        // The ring renders from the intro's first position.
+        setCamera(introFrom);
+
+        viewer.renderer.displayCanvasScaling = QUALITY;
+        viewer.setDirty();
+        await playCameraIntro();
+      } catch (err) {
+        console.error("Viewer failed to load:", err);
+      }
+    </script>
+  </body>
+</html>

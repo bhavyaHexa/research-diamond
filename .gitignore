@@ -1,0 +1,4 @@
+# Local Claude Code / editor settings
+.env
+# Generated access gate config (node auth/build-auth.mjs)
+auth/auth.config.js
