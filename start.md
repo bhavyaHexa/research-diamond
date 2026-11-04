@@ -1,9 +1,17 @@
 # Start the project
 
-Run this command from the project folder in PowerShell:
+Install the dependencies once, then start the dev server. Run these from the project folder in PowerShell:
 
 ```powershell
-py -m http.server 8000
+npm install
+npm run dev
 ```
 
-Then open http://localhost:8000. The viewer loads directly with the default ring appearance.
+Then open the address Vite prints (http://localhost:5173). The viewer loads directly with the default ring appearance.
+
+To check the production build:
+
+```powershell
+npm run build
+npm run preview
+```
