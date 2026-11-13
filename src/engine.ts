@@ -1,6 +1,7 @@
 import type { GemKey, MetalKey } from "./types";
-import type { Viewer } from "./vendor";
+import type { VendorEngine, Viewer } from "./vendor";
 import type { RootStore } from "./store";
+import { registerEngine } from "./pipeline/engineAccess";
 import * as W from "./engine/core.mjs";
 import { loadRing, loadScenePreset } from "./scene/ring";
 import { applyLights } from "./scene/lights";
@@ -51,6 +52,10 @@ export async function startViewer(canvas: HTMLCanvasElement, store: RootStore): 
   const centre = frameRing(W, viewer, model);
   applyQuality(viewer);
   viewer.setDirty();
+
+  // Hand the running engine to the Pipeline Studio (src/pipeline) before the first frame is shown.
+  registerEngine({ viewer, engine: W as unknown as VendorEngine & Record<string, unknown>, manager, model });
+  store.pipeline.markReady();
 
   status.ready();
   await playCameraIntro(W, viewer, centre);

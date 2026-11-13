@@ -690,7 +690,7 @@ Order is solved from each pass's `after/before/required` lists by `refreshPipeli
 
 ### 5.5 Post-processing, verified order & parameters ✅
 
-- **Bloom**: 4 iterations on half-float temp targets (first at ½ res: 768×576). `Prefilter`: soft-knee threshold with `x = threshold (2.0)`, `y = softThreshold (0.03)`, `z = 2xy`, `w = 0.125/(z+1e-5)`; early exit for background (depth > 0.999). Down-sample with 4-tap box (`SampleBox(delta 1)`), up-sample additively (`delta 0.5`, additive blend), weights from `radius 0.6 / power 1`, final `texel += intensity(0.36)·bloom`, `alpha += max(bloom)`. Threshold 2.0 means only HDR highlights > 2 (e.g., diamond flashes) bloom.
+- **Bloom**: 4 iterations on half-float temp targets (first at ½ res: 768×576). `Prefilter`: soft-knee threshold with `x = threshold (2.0)`, `y = softThreshold (0.03)`, `z = 2xy`, `w = 0.125/(z+1e-5)`; early exit for background (depth > 0.999). Down-sample with 4-tap box (`SampleBox(delta 1)`), up-sample additively (`delta 0.5`, additive blend), weights from `radius 0.15 / power 7.94` (iterations 5, as measured in this scene), final `texel += intensity(0.36)·bloom`, `alpha += max(bloom)`. Threshold 2.0 means only HDR highlights > 2 (e.g., diamond flashes) bloom.
 - **Active vs inactive post effects** (runtime compiled `combinedPost` shader contains only tonemap+sRGB): Chromatic aberration, LUT, Vignette, Film grain and the standalone Gamma plugin are **enabled as plugins but inactive in the final shader** (`USE_LUT=0`, no vignette/grain code). Depth of field, SSGI, TAA, velocity are off ✅.
 - **Anti-aliasing**: no MSAA (`antialias:false`, `samples 0`); AA comes entirely from sub-pixel jitter + accumulation (32 samples of the 17-point pattern) ✅.
 

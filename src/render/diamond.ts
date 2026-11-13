@@ -52,6 +52,9 @@ function diamondDefines(envMap: Texture) {
     RAY_BOUNCES: DIAMOND_SETTINGS.rayBounces,
     ENV_MAP_TYPE: (envMap as CubeTexture).isCubeTexture ? 0 : 1,
     USE_ENVMAP: "",
+    // The engine turns this on: the environment is read through the view matrix, so it stays
+    // fixed to the camera, as it does for the gold.
+    FIX_ENV_DIRECTION: "",
     PI: 3.1428,
   };
 }

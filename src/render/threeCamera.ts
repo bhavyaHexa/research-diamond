@@ -4,7 +4,7 @@ import type { Orbit, Point } from "../types";
 import { easeInOut, orbitPoint, toOrbit } from "../utils";
 
 // Vertical field of view, in degrees.
-export const FOV = 24;
+export const FOV = 25;
 
 // Zoom limits: distance from the ring centre (the ring is ~3 units tall; the page opens
 // at ~7.7). min = closest zoom-in, max = furthest zoom-out.

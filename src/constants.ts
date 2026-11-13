@@ -6,3 +6,15 @@ export const PATHS = {
   gemEnvironment: "/assets/scene/gem-000.hdr",
   lightmap: "/assets/scene/lightmap-r-2b.hdr",
 } as const;
+
+// HDR environments the Pipeline Studio can switch between. Files live in public/assets.
+export const SCENE_ENVIRONMENTS = [
+  { id: "lightmap", label: "Studio lightmap (shipped)", url: "/assets/scene/lightmap-r-2b.hdr" },
+  { id: "metal001", label: "Metal environment 001", url: "/assets/envs/env_metal_001_d01c4504e0.hdr" },
+] as const;
+
+// Environments for the diamonds' refraction (read raw, no blur, so sharp bright spots matter).
+export const GEM_ENVIRONMENTS = [
+  { id: "gem000", label: "Gem sparkle map (shipped)", url: "/assets/scene/gem-000.hdr" },
+  { id: "metal001", label: "Metal environment 001", url: "/assets/envs/env_metal_001_d01c4504e0.hdr" },
+] as const;

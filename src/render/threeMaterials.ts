@@ -11,9 +11,9 @@ import {
 } from "./diamond";
 import { computeStoneOffsets, type StoneOffsets } from "./diamondGeometry";
 
-// Stone node names that get the white-diamond treatment (halo D4xxx, centre D5).
-// Ruby band stones (D1xxx) stay as authored.
-export const WHITEN_PATTERN = /^d(4\d{3}|5)$/;
+// Stone node names that get the white-diamond treatment: band stones D1xxx, halo D4xxx,
+// centre D5. The shipped viewer renders all of them as white diamonds.
+export const WHITEN_PATTERN = /^d(1\d{3}|4\d{3}|5)$/;
 
 // Yellow is Ring_v1's authored M1 material.
 export const METALS: Record<MetalKey, MetalSpec> = {
