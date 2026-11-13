@@ -108,7 +108,7 @@ PER FRAME (only while "dirty"; stops after 32 converged frames)                 
         AO       = AO map · (diffuse) , specularOcclusion(N·V, AO, ρ) · (specular)
         out      = LinearToRGBM(direct+indirect, 16)   →  composer target (RGBA8)
   Progressive : history = mix(history, frame, 1/(n+1))             (also the SSR input next frame)
-  Bloom       : threshold 2.0, 4 levels, intensity 0.36 (adds to bright highlights)
+  Bloom       : threshold 2.0, soft knee 0.03, iterations 5, radius 0.15, power 7.94, intensity 0.36 (adds to bright highlights)
   CombinedPost: RGBM→linear · ACES · contrast 1.12 · saturation · sRGB OETF · (background masked)
 ```
 

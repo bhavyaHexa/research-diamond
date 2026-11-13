@@ -146,7 +146,7 @@ const EFFECTS: EffectDef[] = [
     id: "ground",
     title: "Ground & baked shadow",
     section: "Ground & shadows",
-    description: "The invisible ground that receives the ring's soft contact shadow. The shadow is baked by accumulating many jittered shadow renders.",
+    description: "The invisible ground that receives the ring's soft contact shadow, and the light direction used to bake that shadow. The shadow is baked by accumulating many jittered shadow renders.",
     ui: fromPlugin("Ground"),
   },
   {
