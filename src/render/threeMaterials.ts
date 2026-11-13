@@ -36,20 +36,29 @@ export const DEFAULT_GEM: GemKey = "white";
 // once per geometry, before the stone is first drawn.
 export function whitenDiamonds(renderer: WebGLRenderer, scene: Scene, gemEnv: Texture) {
   const captureMaterial = createCaptureMaterial();
-  const captured = new Map<BufferGeometry, { offsets: StoneOffsets; normals: Texture }>();
+  const offsetsByGeometry = new Map<BufferGeometry, StoneOffsets>();
+  // The engine shares ONE normal capture between all stones of a material group: the cube is captured
+  // from the first stone of the group and every other stone (D5 included) reads it with its own frame.
+  // Band stones (D1xxx) form one group, halo and centre stones (D4xxx, D5) the other.
+  const groupNormals = new Map<string, Texture>();
+  const groupOf = (name: string) => (/^d1/.test(slug(name)) ? "band" : "white");
 
   scene.traverse((o) => {
     if (!(o instanceof Mesh) || !slug(o.name).match(WHITEN_PATTERN)) return;
     const geometry = o.geometry as BufferGeometry;
-    let entry = captured.get(geometry);
-    if (!entry) {
-      const offsets = computeStoneOffsets(geometry);
-      const target = captureStoneNormals(renderer, geometry, offsets, captureMaterial);
-      entry = { offsets, normals: target.texture };
-      captured.set(geometry, entry);
+    let offsets = offsetsByGeometry.get(geometry);
+    if (!offsets) {
+      offsets = computeStoneOffsets(geometry);
+      offsetsByGeometry.set(geometry, offsets);
     }
-    o.material = createDiamondMaterial(gemEnv, entry.offsets, entry.normals);
-    bindStone(o, entry.offsets);
+    const group = groupOf(o.name);
+    let normals = groupNormals.get(group);
+    if (!normals) {
+      normals = captureStoneNormals(renderer, geometry, offsets, captureMaterial).texture;
+      groupNormals.set(group, normals);
+    }
+    o.material = createDiamondMaterial(gemEnv, offsets, normals);
+    bindStone(o, offsets);
   });
 }
 

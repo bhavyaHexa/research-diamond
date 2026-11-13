@@ -6,7 +6,7 @@ import {
   DataTexture,
   DoubleSide,
   HalfFloatType,
-  LinearFilter,
+  NearestFilter,
   Matrix4,
   Mesh,
   Scene,
@@ -86,8 +86,8 @@ export function captureStoneNormals(
   material: ShaderMaterial,
 ): WebGLCubeRenderTarget {
   const target = new WebGLCubeRenderTarget(NORMAL_MAP_RES, {
-    minFilter: LinearFilter,
-    magFilter: LinearFilter,
+    minFilter: NearestFilter, // the engine reads this cube with nearest filtering
+    magFilter: NearestFilter,
     generateMipmaps: false,
     type: HalfFloatType,
   });

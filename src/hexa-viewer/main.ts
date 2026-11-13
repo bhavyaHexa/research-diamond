@@ -1,14 +1,16 @@
-import { startOwnViewer } from "./viewer";
+import { DataTexture, FloatType, NearestFilter, RGBAFormat } from "three";
+import { startHexaViewer } from "./viewer";
 import { ssrUniforms } from "./ssr";
 import { SETTINGS } from "./settings";
 (window as unknown as { settings: unknown }).settings = SETTINGS; // dev: tune live
+(window as unknown as { devTexture: unknown }).devTexture = (data: Float32Array, w: number, h: number) => { const t = new DataTexture(data, w, h, RGBAFormat, FloatType); t.minFilter = t.magFilter = NearestFilter; t.needsUpdate = true; return t; }; // dev: upload a float image
 (window as unknown as { ssr: unknown }).ssr = ssrUniforms; // dev: tune live
 
 const canvas = document.getElementById("view") as HTMLCanvasElement;
 const status = document.getElementById("status")!;
 
-startOwnViewer(canvas).then((viewer) => {
-  (window as unknown as { own: unknown }).own = viewer;
+startHexaViewer(canvas).then((viewer) => {
+  (window as unknown as { hexaViewer: unknown }).hexaViewer = viewer;
   const loop = () => {
     viewer.tick();
     status.textContent = viewer.pipeline.converged ? "Converged" : `Accumulating ${viewer.pipeline.frame}/32`;
@@ -18,9 +20,9 @@ startOwnViewer(canvas).then((viewer) => {
 }).catch((e) => { status.textContent = "Failed: " + e; console.error(e); });
 
 // Dev helper: compare the converged frame with a grid saved from the engine viewer
-// (localStorage "engineGrid": {GX, GY, grid[[r,g,b]...]}). Console: `await own.compare()`.
+// (localStorage "engineGrid": {GX, GY, grid[[r,g,b]...]}). Console: `await hexaViewer.compare()`.
 (window as unknown as { compare: () => unknown }).compare = () => {
-  const o = (window as unknown as { own: { renderer: { domElement: HTMLCanvasElement } } }).own;
+  const o = (window as unknown as { hexaViewer: { renderer: { domElement: HTMLCanvasElement } } }).hexaViewer;
   const E = JSON.parse(localStorage.getItem("engineGrid") ?? "null");
   if (!o || !E) return "no viewer or no engineGrid";
   const c = o.renderer.domElement;

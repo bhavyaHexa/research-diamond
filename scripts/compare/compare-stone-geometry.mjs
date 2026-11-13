@@ -1,0 +1,14 @@
+import puppeteer from "puppeteer-core";
+const browser = await puppeteer.launch({ executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true, args: ["--use-gl=angle", "--enable-webgl"] });
+const page = await browser.newPage();
+await page.setViewport({ width: 960, height: 600 });
+await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
+page.setDefaultTimeout(120000);
+const info = `(m) => { const g = m.geometry; g.computeBoundingBox(); const p = g.attributes.position; let s = 0; for (let i = 0; i < p.count; i++) s += p.getX(i) * 1.1 + p.getY(i) * 2.3 + p.getZ(i) * 3.7; const n = g.attributes.normal; let sn = 0; for (let i = 0; i < n.count; i++) sn += n.getX(i) * 1.1 + n.getY(i) * 2.3 + n.getZ(i) * 3.7; m.updateMatrixWorld(true); return { verts: p.count, index: g.index && g.index.count, bbox: [g.boundingBox.min.toArray().map((x) => +x.toFixed(4)), g.boundingBox.max.toArray().map((x) => +x.toFixed(4))], checksumPos: +s.toFixed(3), checksumNormal: +sn.toFixed(3), world: m.matrixWorld.elements.map((x) => +x.toFixed(4)), shared: g.uuid.slice(0, 4) }; }`;
+await page.goto("http://localhost:5173/", { waitUntil: "networkidle0" });
+await page.waitForSelector(".loader.done");
+console.log("engine", JSON.stringify(await page.evaluate((src) => { let m; window.viewer.scene.modelObject.traverse((o) => { if (!m && o.material && o.material.isDiamondMaterial && /^D5$/i.test(o.name)) m = o; }); return eval(src)(m); }, info)));
+await page.goto("http://localhost:5173/hexa-viewer.html", { waitUntil: "networkidle0" });
+await page.waitForFunction(() => window.hexaViewer);
+console.log("own   ", JSON.stringify(await page.evaluate((src) => { let m; window.hexaViewer.scene.traverse((o) => { if (!m && o.isMesh && /^D5$/i.test(o.name)) m = o; }); return eval(src)(m); }, info)));
+await browser.close();

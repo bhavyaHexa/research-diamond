@@ -16,14 +16,17 @@ export const ssrUniforms = {
   ssrProjection: { value: new Matrix4() },
   ssrResolution: { value: new Vector2(1, 1) },
   ssrFrame: { value: 0 },
+  ssrDebug: { value: 0 },
+  ssrDepthRange: { value: new Vector2(1.6, 19.2) },
   ssrRayLength: { value: SETTINGS.ssr.rayLength },
   ssrTolerance: { value: SETTINGS.ssr.tolerance },
   ssrIntensity: { value: SETTINGS.ssr.intensity },
   ssrMaskFront: { value: SETTINGS.ssr.maskFront },
+  ssrPower: { value: SETTINGS.ssr.power },
   tAo: { value: null as Texture | null },
 };
 
-/** Add SSR to a MeshPhysicalMaterial: runs just before the indirect specular is summed. */
+/** Add SSR to a MeshPhysicalMaterial. The blend runs after the environment specular exists, then AO darkens it. */
 export function enableSsr(material: MeshPhysicalMaterial) {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, ssrUniforms);
@@ -31,10 +34,18 @@ export function enableSsr(material: MeshPhysicalMaterial) {
       .replace("void main() {", ssrChunk + "\nvoid main() {")
       .replace(
         "#include <lights_fragment_end>",
-        `#if defined( RE_IndirectSpecular )
-  radiance = ssrApply(radiance, geometryPosition, geometryNormal, geometryViewDir, material.roughness, material.specularColor);
-#endif
-#include <lights_fragment_end>`,
+        `#include <lights_fragment_end>
+#if defined( RE_IndirectSpecular )
+  reflectedLight.indirectSpecular = ssrApply(
+    reflectedLight.indirectSpecular,
+    geometryPosition,
+    geometryNormal,
+    geometryViewDir,
+    material.roughness,
+    material.specularColorBlended,
+    material.specularF90
+  );
+#endif`,
       )
       .replace(
         "#include <aomap_fragment>",
@@ -49,7 +60,7 @@ export function enableSsr(material: MeshPhysicalMaterial) {
 #include <aomap_fragment>`,
       );
   };
-  material.customProgramCacheKey = () => "own-ssr";
+  material.customProgramCacheKey = () => "own-ssr-screen";
   material.needsUpdate = true;
 }
 
