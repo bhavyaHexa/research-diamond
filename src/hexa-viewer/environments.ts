@@ -26,9 +26,13 @@ export interface StudioLook {
   /** The two strips that make highlights along the edges: radiance and softness (radians). */
   strip: number;
   stripSoft: number;
+  /** Share of the floor's brightness kept on the camera's side (1 = an even floor); a darker near floor draws dark rings where bent rays look down. */
+  floorFront: number;
+  /** Darkening of the horizon line (0 = none, 1 = black): the dark line where floor and backdrop meet. */
+  horizon: number;
 }
 
-export const DEFAULT_STUDIO: StudioLook = { room: 0.08, tent: 1.2, tentWidth: 1.5, top: 1.6, topStart: 0.6, floor: 0.96, side: 0.03, sideSoft: 0.2, strip: 8, stripSoft: 0.14 };
+export const DEFAULT_STUDIO: StudioLook = { room: 0.15, tent: 1.2, tentWidth: 1.5, top: 1.6, topStart: 0.6, floor: 0.96, side: 0.15, sideSoft: 0.5, strip: 6, stripSoft: 0.14, floorFront: 0.3, horizon: 0.7 };
 
 const smooth = (edge0: number, edge1: number, x: number) => {
   const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
@@ -46,11 +50,13 @@ function box(a: number, e: number, azimuth: number, halfWidth: number, low: numb
 function studio(a: number, e: number, look: StudioLook): number {
   let radiance = look.room;
   radiance = Math.max(radiance, look.tent * box(a, e, Math.PI, look.tentWidth, -0.3, 1.1, 0.35));      // bright tent behind
-  radiance = Math.max(radiance, look.floor * smooth(-0.02, -0.3, e));                                    // lit floor
+  const front = 1 - smooth(0.8, 1.8, Math.abs(wrap(a)));                                                  // camera side
+  radiance = Math.max(radiance, look.floor * (1 - (1 - look.floorFront) * front) * smooth(-0.02, -0.3, e));   // lit floor
   radiance = Math.max(radiance, look.top * smooth(look.topStart, look.topStart + 0.3, e));                                         // overhead softbox
   // Soft darker bands at the sides: they give the glass its grey edges.
   const band = Math.max(box(a, e, Math.PI / 2, 0.45, -0.5, 1.0, look.sideSoft), box(a, e, -Math.PI / 2, 0.45, -0.5, 1.0, look.sideSoft));
   radiance *= 1 - (1 - look.side) * band;
+  radiance *= 1 - look.horizon * Math.exp(-((e / 0.07) ** 2));
   radiance = Math.max(radiance, look.strip * box(a, e, -0.6, 0.1, -0.2, 0.9, look.stripSoft));          // key strip
   radiance = Math.max(radiance, look.strip * 0.5 * box(a, e, 0.8, 0.14, -0.1, 0.8, look.stripSoft));    // fill strip
   return radiance;
