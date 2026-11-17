@@ -27,7 +27,7 @@ const eng = await page.evaluate(() => {
   }
   return { w, h, finalPx, hdr: Array.from(hdr) };
 });
-await page.goto("http://localhost:5173/hexa-viewer.html", { waitUntil: "networkidle0" });
+await page.goto("http://localhost:5173/hexa-viewer.html?sample&bare", { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer);
 const own = await page.evaluate((hdrArr, w, h) => {
   const o = window.hexaViewer; o.resetCamera(); for (let i = 0; i < 3; i++) o.tick();

@@ -16,7 +16,7 @@ export const SETTINGS = {
   /** Soft ground shadow: cast from almost straight above (tuned against the shipped frame).
    *  Baked once in world space: `samples` shadow maps with the light moved by `spread` are averaged
    *  into a `resolution` x `resolution` texture on the ground. */
-  groundShadow: { direction: [0.01, 1, 0.01] as [number, number, number], distance: 3, spread: 0.5, opacity: 0.45, samples: 64, resolution: 1024 },
+  groundShadow: { direction: [0.01, 1, 0.01] as [number, number, number], distance: 3, spread: 0.5, opacity: 0.45, samples: 64, resolution: 1024, enabled: true },
   /** Diamond environment intensity. The stored material value is 1.6, but fitting the stones'
    *  average brightness against the shipped frame gives about 1.4. */
   stones: { envIntensity: 1.4 },

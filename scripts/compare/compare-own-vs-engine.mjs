@@ -120,7 +120,7 @@ const engineInfo = await (async () => {
 })();
 
 const own = await (async () => {
-  await page.goto("http://localhost:5173/hexa-viewer.html", { waitUntil: "networkidle0" });
+  await page.goto("http://localhost:5173/hexa-viewer.html?sample&bare", { waitUntil: "networkidle0" });
   await page.waitForFunction(() => window.hexaViewer && window.ssr);
   const run = (setup) => page.evaluate((setupSrc, GX, GY) => {
     const own = window.hexaViewer;

@@ -24,7 +24,7 @@ const eng = await page.evaluate(() => {
 });
 console.log("raw bytes corner / centre:", eng.data.slice(0,4), eng.data.slice(((450*eng.w)+720)*4, ((450*eng.w)+720)*4+4), "texIndex");
 console.log("engine gbuffer", eng.w, eng.h, "target found", eng.hasTarget, "camera near/far", eng.near, eng.far);
-await page.goto("http://localhost:5173/hexa-viewer.html", { waitUntil: "networkidle0" });
+await page.goto("http://localhost:5173/hexa-viewer.html?sample&bare", { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer);
 const own = await page.evaluate(() => {
   const o = window.hexaViewer; o.resetCamera(); for (let i = 0; i < 3; i++) o.tick();

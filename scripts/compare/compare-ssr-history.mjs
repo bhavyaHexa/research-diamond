@@ -20,7 +20,7 @@ const readEngine = (ssrOn) => page.evaluate((ssrOn) => {
   return { w, h, gl: Array.from(out) }; // GL row order (bottom-up) kept for texture upload
 }, ssrOn);
 const engAll = await readEngine(true), engNo = await readEngine(false);
-await page.goto("http://localhost:5173/hexa-viewer.html", { waitUntil: "networkidle0" });
+await page.goto("http://localhost:5173/hexa-viewer.html?sample&bare", { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer && window.ssr);
 const runOwn = (ssrOn, useEngineHistory, hist) => page.evaluate((ssrOn, useEngineHistory, hist, w, h) => {
   const o = window.hexaViewer, ssr = window.ssr;

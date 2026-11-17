@@ -6,7 +6,7 @@ const page = await browser.newPage();
 page.setDefaultTimeout(120000);
 page.on("pageerror", (e) => console.log("pageerror", String(e)));
 page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") console.log(m.type(), m.text().slice(0, 300)); });
-await page.goto(`http://localhost:${port}/hexa-viewer.html`, { waitUntil: "networkidle0" });
+await page.goto(`http://localhost:${port}/hexa-viewer.html?sample&bare`, { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer);
 console.log(JSON.stringify(await page.evaluate(() => {
   const o = window.hexaViewer, t = o.ground.shadowTarget;

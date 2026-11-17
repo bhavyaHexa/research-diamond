@@ -1,23 +1,30 @@
 import { DataTexture, FloatType, NearestFilter, RGBAFormat } from "three";
 import { startHexaViewer } from "./viewer";
+import { mountUi } from "./ui/ui";
 import { ssrUniforms } from "./ssr";
 import { SETTINGS } from "./settings";
 (window as unknown as { settings: unknown }).settings = SETTINGS; // dev: tune live
 (window as unknown as { devTexture: unknown }).devTexture = (data: Float32Array, w: number, h: number) => { const t = new DataTexture(data, w, h, RGBAFormat, FloatType); t.minFilter = t.magFilter = NearestFilter; t.needsUpdate = true; return t; }; // dev: upload a float image
 (window as unknown as { ssr: unknown }).ssr = ssrUniforms; // dev: tune live
 
-const canvas = document.getElementById("view") as HTMLCanvasElement;
-const status = document.getElementById("status")!;
+const app = document.getElementById("app")!;
+const ui = mountUi(app);
 
-startHexaViewer(canvas).then((viewer) => {
+// `?sample` opens the sample ring straight away; `?bare` hides the panel so the canvas fills the window
+// (both are used by the compare scripts, which need the same framing as the engine viewer).
+const query = new URLSearchParams(location.search);
+if (query.has("bare")) document.body.classList.add("bare");
+startHexaViewer(ui.canvas).then((viewer) => {
   (window as unknown as { hexaViewer: unknown }).hexaViewer = viewer;
+  ui.bind(viewer);
+  if (query.has("sample")) void ui.loadSample();
   const loop = () => {
     viewer.tick();
-    status.textContent = viewer.pipeline.converged ? "Converged" : `Accumulating ${viewer.pipeline.frame}/32`;
+    ui.frame();
     requestAnimationFrame(loop);
   };
   loop();
-}).catch((e) => { status.textContent = "Failed: " + e; console.error(e); });
+}).catch((e) => { app.textContent = "The viewer could not start: " + e; console.error(e); });
 
 // Dev helper: compare the converged frame with a grid saved from the engine viewer
 // (localStorage "engineGrid": {GX, GY, grid[[r,g,b]...]}). Console: `await hexaViewer.compare()`.

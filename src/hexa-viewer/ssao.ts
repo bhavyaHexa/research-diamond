@@ -49,6 +49,15 @@ export class Ssao {
 
   get texture(): Texture { return this.result.texture; }
 
+  /** Copy the current SETTINGS.ssao values into the shader. */
+  applySettings() {
+    const s = SETTINGS.ssao;
+    this.ao.uniforms.radius.value = s.radius;
+    this.ao.uniforms.intensity.value = s.intensity;
+    this.ao.uniforms.biasEpsilonFalloff.value.set(s.bias, s.epsilon, s.falloff);
+    this.blur.uniforms.edgeSharpness.value = s.edgeSharpness;
+  }
+
   render(renderer: WebGLRenderer, gbuffer: Texture, camera: Camera, frame: number) {
     const w = this.a.width, h = this.a.height;
     const draw = (m: ShaderMaterial, into: WebGLRenderTarget) => {

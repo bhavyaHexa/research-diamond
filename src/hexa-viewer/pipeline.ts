@@ -5,13 +5,14 @@
 //   3. bloom    -> glow of values brighter than the threshold
 //   4. composite -> ACES tone map, contrast, saturation, sRGB, white background
 import {
-  Camera, FloatType, HalfFloatType, LinearFilter, NearestFilter, Mesh, NoBlending, OrthographicCamera, PerspectiveCamera,
+  Camera, Color, FloatType, HalfFloatType, LinearFilter, NearestFilter, Mesh, NoBlending, OrthographicCamera, PerspectiveCamera,
   PlaneGeometry, RGBAFormat, Scene, ShaderMaterial, Vector2, Vector4, WebGLRenderTarget, WebGLRenderer,
 } from "three";
 import fullscreenVert from "./shaders/fullscreen.vert.glsl?raw";
 import accumulateFrag from "./shaders/accumulate.frag.glsl?raw";
 import bloomFrag from "./shaders/bloom.frag.glsl?raw";
 import compositeFrag from "./shaders/composite.frag.glsl?raw";
+import debugFrag from "./shaders/debug.frag.glsl?raw";
 import { SETTINGS } from "./settings";
 import { DepthPrepass, ssrUniforms } from "./ssr";
 import { Ssao } from "./ssao";
@@ -56,8 +57,13 @@ export class Pipeline {
     tScene: { value: null }, tBloom: { value: null }, bloomTexel: { value: new Vector2(1, 1) },
     bloomIntensity: { value: SETTINGS.bloom.intensity }, exposure: { value: SETTINGS.tone.exposure },
     contrast: { value: SETTINGS.tone.contrast }, saturation: { value: SETTINGS.tone.saturation },
-    background: { value: SETTINGS.background },
+    background: { value: SETTINGS.background }, transparentBackground: { value: 0 },
   });
+  private readonly debug = this.fullscreen(debugFrag, {
+    tDepth: { value: null }, tAo: { value: null }, mode: { value: 1 }, depthRange: { value: new Vector2(1, 10) },
+  });
+  /** What the screen shows: the finished image or one of the pre-pass buffers. */
+  view: "beauty" | "depth" | "normals" | "ao" = "beauty";
 
   constructor(private readonly renderer: WebGLRenderer) {
     this.quad.frustumCulled = false;
@@ -93,6 +99,28 @@ export class Pipeline {
   }
 
   restart() { this.frame = 0; }
+
+  /** White page, a flat colour, or transparent (premultiplied alpha, for PNG export with no background). */
+  setBackground(mode: "white" | "colour" | "clear", colour = "#ffffff") {
+    const c = new Color(mode === "colour" ? colour : "#ffffff");
+    this.composite.uniforms.background.value = [c.r, c.g, c.b];
+    this.composite.uniforms.transparentBackground.value = mode === "clear" ? 1 : 0;
+  }
+
+  /** Copy the tone, bloom, SSAO and SSR values of SETTINGS into the shaders and start a fresh accumulation. */
+  applySettings() {
+    const u = this.composite.uniforms;
+    u.bloomIntensity.value = SETTINGS.bloom.intensity;
+    u.exposure.value = SETTINGS.tone.exposure;
+    u.contrast.value = SETTINGS.tone.contrast;
+    u.saturation.value = SETTINGS.tone.saturation;
+    this.ssao.applySettings();
+    ssrUniforms.ssrIntensity.value = SETTINGS.ssr.intensity;
+    ssrUniforms.ssrTolerance.value = SETTINGS.ssr.tolerance;
+    ssrUniforms.ssrMaskFront.value = SETTINGS.ssr.maskFront;
+    ssrUniforms.ssrPower.value = SETTINGS.ssr.power;
+    this.restart();
+  }
 
   get converged() { return this.frame >= SETTINGS.accumulationFrames; }
 
@@ -176,6 +204,15 @@ export class Pipeline {
   }
 
   private present() {
+    if (this.view !== "beauty") {
+      const u = this.debug.uniforms;
+      u.tDepth.value = this.depth.target.texture;
+      u.tAo.value = this.ssao.texture;
+      u.mode.value = this.view === "depth" ? 1 : this.view === "normals" ? 2 : 3;
+      u.depthRange.value.copy(ssrUniforms.ssrDepthRange.value);
+      this.pass(this.debug, null);
+      return;
+    }
     const accumulated = this.history[0];
     const bloom = this.runBloom(accumulated);
     this.composite.uniforms.tScene.value = accumulated.texture;

@@ -2,6 +2,16 @@
 
 A general-purpose 3D model viewer on plain three.js with a readable frame pipeline. It does not import the vendored engine. The original engine viewer (`/`) is unchanged.
 
+## Using it (`src/hexa-viewer/ui/`)
+
+The page opens empty: a drop area plus a sample ring. Everything lives in one 440 px panel on the right (stacked under the model on a phone); the model area has nothing on top of it. Design: the approved Artifact "Hexa 3D Viewer UI"; palette and Roboto font are from hexacoder.com (`ui.css` variables).
+- **Load a model:** drag files anywhere into the window, use Upload / Browse files, or paste a link (needs CORS). GLB and GLTF (with its `.bin` and textures dropped together), Draco and Meshopt compression (`public/draco/` holds the decoder, nothing is fetched from outside). Files are read in the browser only.
+- **Fitting (`model.ts`):** an uploaded model is scaled so its longest side is 3 units (the sample ring's size), centred on the origin, and the ground goes to its lowest point. Camera range, shadow frustum and SSR distances were tuned on the ring and keep working for any model. The sample ring keeps its authored placement.
+- **Materials:** *Jewelry mode* (diamond shader for stones named like the ring's `D1xxx / D4xxx / D5`, SSR metals) is on only for files that have those names; the Scene tab switch turns it off to use the file's own materials. For every other model, all PBR materials get SSR and SSAO (`enableSsr`).
+- **Tabs:** Scene (materials grouped, show/hide, jewelry switch), Material (colour, roughness, metalness, Standard/Metal; sparkle for diamonds), Environment (built-in HDRs, upload `.hdr` / `.exr`, rotation, intensity, lock to camera, White / Clear / Colour background, ground shadow), Render (accumulated frames, resolution scale, exposure, contrast, saturation, bloom, SSR, AO). The footer has view modes (Beauty, Depth, Normals, AO from the pre-pass buffers), reset / fit / turntable / copy, the accumulation status and Export image (PNG, transparent when the background is Clear).
+- **URL parameters:** `?sample` opens the sample ring; `?bare` hides the panel so the canvas fills the window (the compare scripts use `?sample&bare` to get the same framing as the engine viewer).
+- **Code map:** `viewer.ts` (scene, loading, environment, capture), `model.ts` (file reading, fitting), `ui/ui.ts` (panel, plain DOM, sliders and switches in two small registries), `ui/ui.css`, `pipeline.ts` (view modes, `setBackground`, `applySettings`), `ground.ts` (baked shadow, `setHeight`, `setOpacity`). `scripts/compare/ui-smoke.mjs` drives the whole UI headless (upload, tabs, views, export, generic load, phone width).
+
 ## One frame (`src/hexa-viewer/pipeline.ts`)
 
 1. **Depth/normal pre-pass** (`ssr.ts`, `shaders/depth.*`): view-space distance and normal of everything drawn, jittered like the colour frame.

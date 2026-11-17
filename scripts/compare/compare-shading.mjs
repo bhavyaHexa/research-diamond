@@ -30,7 +30,7 @@ for (const [name, cfg] of Object.entries(configs)) {
     return { w, h, data: Array.from(out) };
   }, cfg);
 }
-await page.goto("http://localhost:5173/hexa-viewer.html", { waitUntil: "networkidle0" });
+await page.goto("http://localhost:5173/hexa-viewer.html?sample&bare", { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer && window.ssr);
 const ownSetup = process.argv[2] || ""; // optional JS run in the own page before measuring (own, ssr, window.settings)
 const own = {};

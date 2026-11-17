@@ -18,7 +18,7 @@ console.log("engine vs engine (green channel):", JSON.stringify(await page.evalu
   const gold = (A, B, i) => A[i*4] > 1.8 * A[i*4+2] && A[i*4] > 0.2;
   return { stone: f(A, B, stone), gold: f(A, B, gold) };
 }, corrFn)));
-await page.goto("http://localhost:5173/hexa-viewer.html", { waitUntil: "networkidle0" });
+await page.goto("http://localhost:5173/hexa-viewer.html?sample&bare", { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer);
 console.log("own vs own (green channel):", JSON.stringify(await page.evaluate((fn) => {
   const o = window.hexaViewer;

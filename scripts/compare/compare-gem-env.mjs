@@ -9,7 +9,7 @@ const stats = `(tex) => { const im = tex.image; const d = im.data; const half = 
 await page.goto("http://localhost:5173/", { waitUntil: "networkidle0" });
 await page.waitForSelector(".loader.done");
 console.log("engine", JSON.stringify(await page.evaluate((src) => { const v = window.viewer; let t; v.scene.modelObject.traverse((o) => { if (!t && o.material && o.material.isDiamondMaterial) t = o.material.uniforms.envMap.value; }); return eval(src)(t); }, stats)));
-await page.goto("http://localhost:5173/hexa-viewer.html", { waitUntil: "networkidle0" });
+await page.goto("http://localhost:5173/hexa-viewer.html?sample&bare", { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer);
 console.log("own   ", JSON.stringify(await page.evaluate((src) => { let t; window.hexaViewer.scene.traverse((o) => { if (!t && o.material && o.material.uniforms && o.material.uniforms.tCubeMapNormals) t = o.material.uniforms.envMap.value; }); return eval(src)(t); }, stats)));
 await browser.close();

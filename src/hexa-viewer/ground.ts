@@ -31,6 +31,11 @@ export interface Ground {
   setDirection(x: number, y: number, z: number): void;
   /** Render the soft ground shadow into a texture and show it on the ground. Call once the scene is built. */
   bake(renderer: WebGLRenderer, scene: Scene): void;
+  /** Move the ground plane to the model's lowest point (call `bake` after). */
+  setHeight(y: number): void;
+  /** Shadow darkness, 0-1. No rebake needed. */
+  setOpacity(value: number): void;
+  setVisible(on: boolean): void;
 }
 
 export function addLightAndGround(scene: Scene, groundY: number): Ground {
@@ -51,9 +56,7 @@ export function addLightAndGround(scene: Scene, groundY: number): Ground {
   cam.updateProjectionMatrix();
   scene.add(shadowLight, shadowLight.target);
 
-  scene.traverse((o) => {
-    if ((o as Mesh).isMesh) o.castShadow = true;
-  });
+  let groundHeight = groundY;
 
   // Until it is baked the ground draws nothing. (Not `visible: false`: three skips such meshes
   // even when the bake pass overrides their material.)
@@ -75,15 +78,19 @@ export function addLightAndGround(scene: Scene, groundY: number): Ground {
   const bake = (renderer: WebGLRenderer, bakeScene: Scene) => {
     baked = { renderer, scene: bakeScene };
     const { samples, spread, opacity, resolution } = SETTINGS.groundShadow;
+    bakeScene.traverse((o) => {
+      if ((o as Mesh).isMesh && o !== ground) o.castShadow = true;
+    });
 
     shadowMap?.dispose();
     shadowMap = new WebGLRenderTarget(resolution, resolution, {
       type: HalfFloatType, format: RGBAFormat, minFilter: LinearFilter, magFilter: LinearFilter, depthBuffer: false,
     });
 
-    // Every ShadowMaterial pass adds opacity/samples of shadow into the target (white * alpha into
-    // rgb, alpha into alpha), so after all samples the green channel holds the mean shadow * opacity.
-    const add = new ShadowMaterial({ color: 0xffffff, opacity: opacity / samples });
+    // Every ShadowMaterial pass adds 1/samples of shadow into the target (white * alpha into rgb,
+    // alpha into alpha), so after all samples the green channel holds the mean shadow. The ground
+    // material applies the opacity, so it can change without a rebake.
+    const add = new ShadowMaterial({ color: 0xffffff, opacity: 1 / samples });
     add.blending = CustomBlending;
     add.blendEquation = AddEquation;
     add.blendSrc = SrcAlphaFactor;
@@ -99,8 +106,8 @@ export function addLightAndGround(scene: Scene, groundY: number): Ground {
     const half = GROUND_SIZE / 2;
     const top = new OrthographicCamera(-half, half, half, -half, 0.1, 40);
     top.up.set(0, 0, -1);
-    top.position.set(0, groundY + 10, 0);
-    top.lookAt(0, groundY, 0);
+    top.position.set(0, groundHeight + 10, 0);
+    top.lookAt(0, groundHeight, 0);
 
     const previousTarget = renderer.getRenderTarget();
     const previousClear = renderer.getClearColor(new Color());
@@ -132,7 +139,7 @@ export function addLightAndGround(scene: Scene, groundY: number): Ground {
 
     // Black with the baked shadow as its alpha (alphaMap reads the green channel).
     (ground.material as MeshBasicMaterial).dispose();
-    ground.material = new MeshBasicMaterial({ color: 0x000000, alphaMap: shadowMap.texture, transparent: true });
+    ground.material = new MeshBasicMaterial({ color: 0x000000, alphaMap: shadowMap.texture, transparent: true, opacity });
   };
 
   return {
@@ -145,5 +152,14 @@ export function addLightAndGround(scene: Scene, groundY: number): Ground {
       if (baked) bake(baked.renderer, baked.scene);
     },
     bake,
+    setHeight(y) {
+      groundHeight = y;
+      ground.position.y = y;
+    },
+    setOpacity(value) {
+      SETTINGS.groundShadow.opacity = value;
+      (ground.material as MeshBasicMaterial).opacity = value;
+    },
+    setVisible(on) { ground.visible = on; },
   };
 }

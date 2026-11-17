@@ -18,7 +18,7 @@ const eng = await page.evaluate(() => {
   return { N, offsets: { center: Array.from(s.center), centerOffset: Array.from(s.centerOffset), offsetMatrix: Array.from(s.offsetMatrix), radius: s.radius }, faces, type: rt.texture.type };
 });
 console.log("engine capture", eng.N, "type", eng.type);
-await page.goto("http://localhost:5173/hexa-viewer.html", { waitUntil: "networkidle0" });
+await page.goto("http://localhost:5173/hexa-viewer.html?sample&bare", { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer);
 const own = await page.evaluate(async (e) => {
   const THREE = await import("/node_modules/.vite/deps/three.js"); const D = await import("/src/render/diamond.ts");

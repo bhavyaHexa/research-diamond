@@ -30,7 +30,7 @@ const eng = await page.evaluate(() => {
   const offsets = {}; v.scene.modelObject.traverse((o) => { if (o.material && o.material.isDiamondMaterial) { const t = o.geometry.userData.normalsCaptureOffsets; if (t) offsets[o.name.toLowerCase()] = { centerOffset: Array.from(t.centerOffset), radius: t.radius, offsetMatrix: Array.from(t.offsetMatrix), center: Array.from(t.center) }; } });
   return { w, h, type: rt.texture.type, data: Array.from(out), offsets };
 });
-await page.goto("http://localhost:5173/hexa-viewer.html", { waitUntil: "networkidle0" });
+await page.goto("http://localhost:5173/hexa-viewer.html?sample&bare", { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer && window.ssr);
 // Setups to try in the own viewer: node compare-history.mjs "name=js" ... (default: just the baseline).
 const cli = Object.fromEntries(process.argv.slice(2).map((a) => { const i = a.indexOf("="); return [a.slice(0, i), a.slice(i + 1)]; }));

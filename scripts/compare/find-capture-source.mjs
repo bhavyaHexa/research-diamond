@@ -16,7 +16,7 @@ const eng = await page.evaluate(() => {
   const N = sample.width, faces = []; for (let f = 0; f < 6; f++) { const buf = new Uint16Array(N * N * 4); r.readRenderTargetPixels(sample, 0, 0, N, N, buf, f); const a = new Float32Array(N * N); for (let i = 0; i < N * N; i++) a[i] = half(buf[i * 4 + 3]); faces.push(Array.from(a)); }
   return { N, offsets, groups, order, faces };
 });
-await page.goto("http://localhost:5173/hexa-viewer.html", { waitUntil: "networkidle0" });
+await page.goto("http://localhost:5173/hexa-viewer.html?sample&bare", { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer);
 const res = await page.evaluate(async (e) => {
   const THREE = await import("/node_modules/.vite/deps/three.js"); const D = await import("/src/render/diamond.ts");

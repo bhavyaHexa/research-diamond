@@ -4,15 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hexa 3D Viewer</title>
-    <style>
-      html, body { margin: 0; height: 100%; background: #fff; overflow: hidden; }
-      canvas { display: block; width: 100%; height: 100%; }
-      #status { position: fixed; left: 12px; bottom: 10px; font: 12px/1.4 system-ui, sans-serif; color: #555; }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <canvas id="view"></canvas>
-    <div id="status">Loading…</div>
+    <div id="app"></div>
     <script type="module" src="/src/hexa-viewer/main.ts"></script>
   </body>
 </html>

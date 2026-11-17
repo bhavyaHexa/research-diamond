@@ -14,7 +14,7 @@ const eng = await page.evaluate(() => {
   v.scene.modelObject.traverse((o) => { if (o.material && o.material.isDiamondMaterial && /^D(5|4001|1001)$/i.test(o.name)) { const s = o.geometry.userData.normalsCaptureOffsets; const t = o.geometry.userData._normalsCaptureMap; out[o.name] = s ? { centerOffset: Array.from(s.centerOffset), radius: s.radius, offsetMatrix: Array.from(s.offsetMatrix), keys: Object.keys(s), captureRes: t && t.texture && t.width } : null; } });
   return out;
 });
-await page.goto("http://localhost:5173/hexa-viewer.html", { waitUntil: "networkidle0" });
+await page.goto("http://localhost:5173/hexa-viewer.html?sample&bare", { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer);
 const own = await page.evaluate(async () => {
   const { computeStoneOffsets } = await import("/src/render/diamondGeometry.ts");

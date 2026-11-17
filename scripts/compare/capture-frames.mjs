@@ -19,7 +19,7 @@ const eu = await page.evaluate((grab) => {
   return eval(grab);
 }, grab);
 save("tmp-engine.png", eu);
-await page.goto("http://localhost:5173/hexa-viewer.html", { waitUntil: "networkidle0" });
+await page.goto("http://localhost:5173/hexa-viewer.html?sample&bare", { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer);
 const variants = { own: "" }; // name -> JS setup run in the own page before the frame is captured
 for (const [name, setup] of Object.entries(variants)) {

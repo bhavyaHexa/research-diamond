@@ -9,7 +9,7 @@ const page = await browser.newPage();
 await page.setViewport({ width: 960, height: 600 });
 page.setDefaultTimeout(120000);
 page.on("pageerror", (e) => console.log("pageerror", String(e)));
-await page.goto(`http://localhost:${port}/hexa-viewer.html`, { waitUntil: "networkidle0" });
+await page.goto(`http://localhost:${port}/hexa-viewer.html?sample&bare`, { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer);
 const out = await page.evaluate(() => {
   const o = window.hexaViewer, GX = 48, GY = 30;

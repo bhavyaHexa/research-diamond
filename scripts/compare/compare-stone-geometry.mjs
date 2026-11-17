@@ -8,7 +8,7 @@ const info = `(m) => { const g = m.geometry; g.computeBoundingBox(); const p = g
 await page.goto("http://localhost:5173/", { waitUntil: "networkidle0" });
 await page.waitForSelector(".loader.done");
 console.log("engine", JSON.stringify(await page.evaluate((src) => { let m; window.viewer.scene.modelObject.traverse((o) => { if (!m && o.material && o.material.isDiamondMaterial && /^D5$/i.test(o.name)) m = o; }); return eval(src)(m); }, info)));
-await page.goto("http://localhost:5173/hexa-viewer.html", { waitUntil: "networkidle0" });
+await page.goto("http://localhost:5173/hexa-viewer.html?sample&bare", { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer);
 console.log("own   ", JSON.stringify(await page.evaluate((src) => { let m; window.hexaViewer.scene.traverse((o) => { if (!m && o.isMesh && /^D5$/i.test(o.name)) m = o; }); return eval(src)(m); }, info)));
 await browser.close();

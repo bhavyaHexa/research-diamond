@@ -8,7 +8,8 @@ uniform vec2 bloomTexel;    // 1 / size of the bloom texture
 uniform float exposure;
 uniform float contrast;
 uniform float saturation;
-uniform vec3 background;    // linear colour behind the ring
+uniform vec3 background;    // linear colour behind the model
+uniform float transparentBackground; // 1: output alpha instead of a background colour
 
 #include <tonemapping_pars_fragment>
 
@@ -33,6 +34,11 @@ void main() {
   c = (c - 0.5) * contrast + 0.5;
   c = mix(vec3(dot(c, vec3(0.2125, 0.7154, 0.0721))), c, saturation);
 
+  if (transparentBackground > 0.5) {
+    // Premultiplied alpha: the canvas shows the page behind it wherever nothing was drawn.
+    gl_FragColor = vec4(linearToSRGB(clamp(c, 0.0, 1.0)) * coverage, coverage);
+    return;
+  }
   vec3 outColor = mix(background, clamp(c, 0.0, 1.0), coverage);
   gl_FragColor = vec4(linearToSRGB(outColor), 1.0);
 }
