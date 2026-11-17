@@ -1,8 +1,8 @@
 // The Hexa 3D Viewer: plain three.js scene + src/hexa-viewer/pipeline.ts for the frame.
 // Nothing here touches the vendored engine. Models come from files the user gives it (or the sample ring).
 import {
-  EquirectangularReflectionMapping, Group, Matrix4, Mesh, PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera, Scene,
-  Texture, WebGLRenderer,
+  EquirectangularReflectionMapping, Group, Material, Matrix4, Mesh, PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera, Quaternion, Scene,
+  Texture, Vector3, WebGLRenderer,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
@@ -14,13 +14,15 @@ import {
 } from "../render/threeMaterials";
 import { CAMERA_INTRO, FOV, ZOOM, createControls } from "../render/threeCamera";
 import { slug } from "../utils";
+import { GLASS_STUDIO, createGlassStudio } from "./environments";
+import { createGlassMaterial, glassOf, isGlass } from "./glass";
 import { Pipeline } from "./pipeline";
 import { addLightAndGround } from "./ground";
 import { disposeModel, fitToReference, measureModel, placeSample, readModel, type ModelStats } from "./model";
 import { enableSsr } from "./ssr";
 import { SETTINGS } from "./settings";
 
-export const LOAD_STEPS = ["Reading file", "Preparing materials", "Fitting camera and ground", "Baking ground shadow"] as const;
+export const LOAD_STEPS = ["Reading file", "Preparing materials", "Fitting camera and ground", "Applying glass material", "Baking ground shadow"] as const;
 
 export interface ModelInfo extends ModelStats {
   name: string;
@@ -36,6 +38,8 @@ export interface LoadOptions {
   onStep?: (step: number) => void;
   /** Force Jewelry mode on or off. Default: on when the file has the ring's stone names. */
   jewelry?: boolean;
+  /** Give every mesh of the model the glass material once it is loaded. */
+  glass?: boolean;
 }
 
 export interface HexaViewer {
@@ -58,11 +62,17 @@ export interface HexaViewer {
   setResolutionScale(scale: number): void;
   loadFiles(files: File[], options?: LoadOptions): Promise<ModelInfo>;
   loadSample(options?: LoadOptions): Promise<ModelInfo>;
+  /** Load a model file from a URL. `sample` keeps the file's own placement instead of fitting it (the ring). */
+  loadUrl(url: string, name: string, options?: LoadOptions & { sample?: boolean }): Promise<ModelInfo>;
   /** Change Jewelry mode for the model on screen (reloads its materials). */
   setJewelryMode(on: boolean): Promise<void>;
   clearModel(): void;
+  /** Give these meshes one shared glass material (their own material is kept so it can be restored). */
+  applyGlass(meshes: Mesh[]): Material;
+  /** Undo `applyGlass`: the meshes get their file material back . */
+  restoreMaterials(meshes: Mesh[]): void;
   /** A .hdr or .exr file (or URL) lights the model and its reflections. Returns the name and pixel width. */
-  setEnvironment(source: string | File): Promise<{ name: string; width: number }>;
+  setEnvironment(source: string | File | Texture): Promise<{ name: string; width: number }>;
   /** PNG of the current frame (transparent where nothing is drawn if the background is "clear"). */
   capture(): Promise<Blob>;
   /** Square data URL of the middle of the current frame, for the file card. */
@@ -162,7 +172,31 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
     });
   };
 
+  // The floor reflection: a mirrored copy of every glass mesh under the ground, drawn by the glass pass with a fade.
+  const mirrors: Mesh[] = [];
+  const clearMirrors = () => { mirrors.splice(0).forEach((m) => { m.removeFromParent(); (m.material as Material).dispose(); }); };
+  const addMirrors = (meshes: Mesh[], glass: Material) => {
+    clearMirrors();
+    const y = ground.height;
+    const flip = new Matrix4().makeTranslation(0, y, 0).multiply(new Matrix4().makeScale(1, -1, 1)).multiply(new Matrix4().makeTranslation(0, -y, 0));
+    const material = createGlassMaterial("reflection", undefined, glassOf(glass), new Vector3(y, SETTINGS.floorReflection.length, SETTINGS.floorReflection.strength));
+    for (const mesh of meshes) {
+      if (Array.isArray(mesh.material)) continue;
+      mesh.updateWorldMatrix(true, false);
+      const mirror = new Mesh(mesh.geometry, material);
+      mirror.matrixAutoUpdate = false;
+      mirror.matrix.copy(flip).multiply(mesh.matrixWorld);
+      mirror.frustumCulled = false;
+      mirror.castShadow = false;
+      mirror.userData.reflection = true;
+      mirror.userData.skipDepth = true;
+      scene.add(mirror);
+      mirrors.push(mirror);
+    }
+  };
+
   const removeCurrent = () => {
+    clearMirrors();
     if (!current) return;
     scene.remove(current.root);
     disposeModel(current.root);
@@ -185,7 +219,14 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
     ground.setHeight(sample ? placeSample(root) : fitToReference(root));
     resetCamera();
 
-    await step(3);
+    if (options.glass) {
+      await step(3);
+      const meshes: Mesh[] = [];
+      root.traverse((o) => { if ((o as Mesh).isMesh) meshes.push(o as Mesh); });
+      viewer.applyGlass(meshes);
+    }
+
+    await step(4);
     ground.bake(renderer, scene);
     ground.setVisible(SETTINGS.groundShadow.enabled);
     pipeline.restart();
@@ -196,7 +237,10 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
     return info;
   };
 
-  const loadEquirect = async (source: string | File) => {
+  const loadEquirect = async (source: string | File | Texture) => {
+    if (typeof source !== "string" && (source as Texture).isTexture) return { name: "Custom", texture: source as Texture };
+    if (typeof source !== "string" && !(source instanceof File)) throw new Error("Unsupported environment.");
+    if (source === GLASS_STUDIO) return { name: "Glass studio", texture: createGlassStudio() as Texture };
     const name = typeof source === "string" ? decodeURIComponent(source.split("?")[0].split("/").pop() ?? source) : source.name;
     const url = typeof source === "string" ? source : URL.createObjectURL(source);
     try {
@@ -234,10 +278,11 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
       fit();
     },
     loadFiles: (files, options = {}) => show(files, false, options),
-    async loadSample(options = {}) {
-      const response = await fetch(PATHS.ring);
-      if (!response.ok) throw new Error("The sample model could not be loaded.");
-      return show([new File([await response.blob()], "ring-halo.glb")], true, options);
+    loadSample: (options = {}) => viewer.loadUrl(PATHS.ring, "ring-halo.glb", { ...options, sample: true }),
+    async loadUrl(url, name, { sample = false, ...options } = {}) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`${name} could not be loaded.`);
+      return show([new File([await response.blob()], name)], sample, options);
     },
     async setJewelryMode(on) {
       if (!current) return;
@@ -248,6 +293,32 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
       removeCurrent();
       viewer.model = null;
       ground.setVisible(false);
+      pipeline.restart();
+    },
+    applyGlass(meshes) {
+      const glass = createGlassMaterial((meshes[0]?.material as Material | undefined)?.name || "Glass");
+      for (const mesh of meshes) {
+        if (Array.isArray(mesh.material)) continue;
+        mesh.userData.hexaOriginal ??= mesh.material;
+        mesh.material = glass;
+        mesh.userData.skipDepth = true; // SSR and AO ignore glass
+      }
+      if (SETTINGS.floorReflection.strength > 0) addMirrors(meshes, glass);
+      pipeline.restart();
+      return glass;
+    },
+    restoreMaterials(meshes) {
+      clearMirrors();
+      const glass = new Set<Material>();
+      for (const mesh of meshes) {
+        const original = mesh.userData.hexaOriginal as Material | undefined;
+        if (!original) continue;
+        glass.add(mesh.material as Material);
+        mesh.material = original;
+        mesh.userData.skipDepth = false;
+        delete mesh.userData.hexaOriginal;
+      }
+      glass.forEach((m) => m.dispose());
       pipeline.restart();
     },
     async setEnvironment(source) {

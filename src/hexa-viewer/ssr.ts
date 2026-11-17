@@ -78,7 +78,7 @@ export class DepthPrepass {
   render(renderer: WebGLRenderer, scene: Scene, camera: Camera) {
     const previous = scene.overrideMaterial;
     const hidden: Mesh[] = [];
-    scene.traverse((o) => { if ((o as Mesh).isMesh && o.userData.skipDepth) { hidden.push(o as Mesh); o.visible = false; } });
+    scene.traverse((o) => { if ((o as Mesh).isMesh && o.visible && o.userData.skipDepth) { hidden.push(o as Mesh); o.visible = false; } });
     scene.overrideMaterial = this.material;
     renderer.setClearColor(0x000000, 0);
     renderer.setRenderTarget(this.target);

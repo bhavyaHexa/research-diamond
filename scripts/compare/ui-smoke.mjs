@@ -17,7 +17,7 @@ const ok = (label, value) => console.log(label.padEnd(34), value);
 const shot = async (name) => { if (shots) await page.screenshot({ path: path.join(shots, name + ".png") }); };
 const settle = async () => { await page.evaluate(async () => { const v = window.hexaViewer; for (let i = 0; i < 40; i++) v.tick(); }); };
 
-await page.goto(`http://localhost:${port}/hexa-viewer.html`, { waitUntil: "networkidle0" });
+await page.goto(`http://localhost:${port}/hexa-viewer.html?empty`, { waitUntil: "networkidle0" });
 await page.waitForFunction(() => window.hexaViewer);
 ok("empty overlay visible", await page.$eval("#empty", (e) => !e.hidden));
 ok("tabs locked", await page.$eval("#tabs", (e) => e.classList.contains("locked")));

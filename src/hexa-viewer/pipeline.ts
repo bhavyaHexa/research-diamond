@@ -13,6 +13,7 @@ import accumulateFrag from "./shaders/accumulate.frag.glsl?raw";
 import bloomFrag from "./shaders/bloom.frag.glsl?raw";
 import compositeFrag from "./shaders/composite.frag.glsl?raw";
 import debugFrag from "./shaders/debug.frag.glsl?raw";
+import { GlassPass, glassUniforms } from "./glass";
 import { SETTINGS } from "./settings";
 import { DepthPrepass, ssrUniforms } from "./ssr";
 import { Ssao } from "./ssao";
@@ -41,6 +42,7 @@ export class Pipeline {
   private bloomLevels: WebGLRenderTarget[] = [];
   private bloomUp: WebGLRenderTarget[] = [];
   private depth!: DepthPrepass;
+  private glass!: GlassPass;
   private ssao!: Ssao;
   private width = 0;
   private height = 0;
@@ -87,7 +89,7 @@ export class Pipeline {
     // The scene is drawn here, so it needs a depth buffer: without one, hidden surfaces
     // overwrite visible ones and the metal looks streaked.
     this.sceneTarget = target(w, h, true);
-    if (this.depth) { this.depth.resize(w, h); this.ssao.resize(w, h); } else { this.depth = new DepthPrepass(w, h); this.ssao = new Ssao(w, h); }
+    if (this.depth) { this.depth.resize(w, h); this.ssao.resize(w, h); this.glass.resize(w, h); } else { this.depth = new DepthPrepass(w, h); this.ssao = new Ssao(w, h); this.glass = new GlassPass(w, h); }
     this.history = [accumulationTarget(w, h), accumulationTarget(w, h)];
     this.bloomLevels = []; this.bloomUp = [];
     for (let i = 0, lw = w, lh = h; i < SETTINGS.bloom.levels; i++) {
@@ -105,6 +107,8 @@ export class Pipeline {
     const c = new Color(mode === "colour" ? colour : "#ffffff");
     this.composite.uniforms.background.value = [c.r, c.g, c.b];
     this.composite.uniforms.transparentBackground.value = mode === "clear" ? 1 : 0;
+    // Glass sees the page through itself: its colour, or nothing when the background is transparent.
+    glassUniforms.glassPage.value.set(...(mode === "clear" ? [0, 0, 0] : [c.r, c.g, c.b]) as [number, number, number]);
   }
 
   /** Copy the tone, bloom, SSAO and SSR values of SETTINGS into the shaders and start a fresh accumulation. */
@@ -149,7 +153,12 @@ export class Pipeline {
       this.renderer.setClearColor(0x000000, 0);
       this.renderer.setRenderTarget(this.sceneTarget);
       this.renderer.clear();
+      // Glass is drawn after everything else, so it can refract the finished scene (see glass.ts).
+      const glass = GlassPass.meshes(scene);
+      glass.forEach((m) => (m.visible = false));
       this.renderer.render(scene, camera);
+      glass.forEach((m) => (m.visible = true));
+      if (glass.length) this.glass.render(this.renderer, scene, camera, glass, this.sceneTarget);
       cam.clearViewOffset();
 
       const [read, write] = this.history;

@@ -7,6 +7,9 @@ import { SETTINGS } from "./settings";
 (window as unknown as { devTexture: unknown }).devTexture = (data: Float32Array, w: number, h: number) => { const t = new DataTexture(data, w, h, RGBAFormat, FloatType); t.minFilter = t.magFilter = NearestFilter; t.needsUpdate = true; return t; }; // dev: upload a float image
 (window as unknown as { ssr: unknown }).ssr = ssrUniforms; // dev: tune live
 
+// Development only: a generated test bottle for trying the glass material (dropped out of the production build).
+if (import.meta.env.DEV) void import("./dev/testBottle").then((m) => { (window as unknown as { hexaDev: unknown }).hexaDev = { makeTestBottle: m.makeTestBottle }; });
+
 const app = document.getElementById("app")!;
 const ui = mountUi(app);
 
@@ -17,7 +20,10 @@ if (query.has("bare")) document.body.classList.add("bare");
 startHexaViewer(ui.canvas).then((viewer) => {
   (window as unknown as { hexaViewer: unknown }).hexaViewer = viewer;
   ui.bind(viewer);
+  if (import.meta.env.DEV) void import("./environments").then((e) => { (window as unknown as { hexaDev: Record<string, unknown> }).hexaDev.studio = (look: object) => viewer.setEnvironment(e.createGlassStudio({ ...e.DEFAULT_STUDIO, ...look })); });
+  // `?sample`: the ring. `?empty`: nothing. Otherwise: the perfume bottle with glass.
   if (query.has("sample")) void ui.loadSample();
+  else if (!query.has("empty")) void ui.loadDefault();
   const loop = () => {
     viewer.tick();
     ui.frame();

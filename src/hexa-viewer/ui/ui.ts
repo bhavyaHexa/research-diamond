@@ -1,8 +1,10 @@
 // The viewer's interface: a stage with the model and one docked panel on the right.
 // Plain DOM. State lives in `viewer` and SETTINGS; the panel only reads and writes them.
-import type { Material, Mesh, MeshStandardMaterial, ShaderMaterial } from "three";
-import { SCENE_ENVIRONMENTS } from "../../constants";
+import type { Material, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, ShaderMaterial } from "three";
+import { PATHS, SCENE_ENVIRONMENTS } from "../../constants";
 import { DIAMOND_TAG } from "../../render/diamond";
+import { GLASS_STUDIO } from "../environments";
+import { glassOf, isGlass } from "../glass";
 import { SETTINGS } from "../settings";
 import { LOAD_STEPS, type HexaViewer, type ModelInfo } from "../viewer";
 import { icon } from "./icons";
@@ -34,7 +36,8 @@ interface Environment { id: string; name: string; chip: string; background: stri
 
 const STUDIO = "linear-gradient(160deg, #E3EAF4 0%, #A9B8CE 55%, #55627A 100%)";
 const WARM = "linear-gradient(160deg, #F2E6D2 0%, #B89A6A 55%, #4A3B2A 100%)";
-const COOL = "linear-gradient(160deg, #CFE3FA 0%, #8DB4DE 55%, #5F7FA3 100%)";
+const GLASS = "linear-gradient(90deg, #15171c 0%, #15171c 14%, #ffffff 17%, #ffffff 22%, #2a2d33 26%, #e8eaee 55%, #ffffff 68%, #15171c 80%, #15171c 90%, #cfd3da 100%)";
+const COOL ="linear-gradient(160deg, #CFE3FA 0%, #8DB4DE 55%, #5F7FA3 100%)";
 
 export function mountUi(app: HTMLElement) {
   app.innerHTML = `
@@ -118,6 +121,7 @@ export function mountUi(app: HTMLElement) {
   let backgroundColour = "#ffffff";
   let currentEnv = SCENE_ENVIRONMENTS[0].id as string;
   const environments: Environment[] = [
+    { id: "glass-studio", name: "Glass studio", chip: "Procedural", background: GLASS, source: GLASS_STUDIO },
     { id: SCENE_ENVIRONMENTS[0].id, name: "Studio", chip: "HDR", background: STUDIO, source: SCENE_ENVIRONMENTS[0].url },
     { id: SCENE_ENVIRONMENTS[1].id, name: "Metal 001", chip: "HDR", background: WARM, source: SCENE_ENVIRONMENTS[1].url },
   ];
@@ -130,6 +134,7 @@ export function mountUi(app: HTMLElement) {
   const restart = () => viewer.pipeline.restart();
   const applyLook = () => viewer.pipeline.applySettings();
   const materialOf = () => selected?.materials[0] as (MeshStandardMaterial | undefined);
+  const glassUniforms = () => (selected && isGlass(selected.materials[0]) ? glassOf(selected.materials[0]) : undefined);
   interface SliderDef { label: string; min: number; max: number; step: number; get(): number; set(v: number): void; fmt(v: number): string; commit?: boolean }
   const num = (v: number, digits = 2) => v.toFixed(digits);
   const SLIDERS: Record<string, SliderDef> = {
@@ -137,12 +142,21 @@ export function mountUi(app: HTMLElement) {
     "env.intensity": { label: "Intensity", min: 0, max: 3, step: 0.01, get: () => SETTINGS.environment.intensity, set: (v) => { SETTINGS.environment.intensity = v; viewer.scene.environmentIntensity = v; restart(); }, fmt: num },
     "shadow.opacity": { label: "Opacity", min: 0, max: 1, step: 0.01, get: () => SETTINGS.groundShadow.opacity, set: (v) => { viewer.ground.setOpacity(v); restart(); }, fmt: num },
     "shadow.softness": { label: "Softness", min: 0, max: 1, step: 0.01, get: () => SETTINGS.groundShadow.spread, set: (v) => { SETTINGS.groundShadow.spread = v; if (viewer.model) viewer.ground.bake(viewer.renderer, viewer.scene); restart(); }, fmt: num, commit: true },
+    "shadow.caustics": { label: "Caustics (glass)", min: 0, max: 2, step: 0.05, get: () => SETTINGS.groundShadow.caustics, set: (v) => { viewer.ground.setCaustics(v); if (viewer.model) viewer.ground.bake(viewer.renderer, viewer.scene); restart(); }, fmt: num, commit: true },
     "tone.exposure": { label: "Exposure", min: 0.2, max: 2, step: 0.01, get: () => SETTINGS.tone.exposure, set: (v) => { SETTINGS.tone.exposure = v; applyLook(); }, fmt: num },
     "tone.contrast": { label: "Contrast", min: 0.6, max: 1.6, step: 0.01, get: () => SETTINGS.tone.contrast, set: (v) => { SETTINGS.tone.contrast = v; applyLook(); }, fmt: num },
     "tone.saturation": { label: "Saturation", min: 0, max: 2, step: 0.01, get: () => SETTINGS.tone.saturation, set: (v) => { SETTINGS.tone.saturation = v; applyLook(); }, fmt: num },
     "bloom.intensity": { label: "Bloom", min: 0, max: 1.5, step: 0.01, get: () => SETTINGS.bloom.intensity, set: (v) => { SETTINGS.bloom.intensity = v; applyLook(); }, fmt: num },
     "mat.roughness": { label: "Roughness", min: 0, max: 1, step: 0.01, get: () => materialOf()?.roughness ?? 0, set: (v) => { selected?.materials.forEach((m) => { (m as MeshStandardMaterial).roughness = v; }); restart(); }, fmt: num },
     "mat.metalness": { label: "Metalness", min: 0, max: 1, step: 0.01, get: () => materialOf()?.metalness ?? 0, set: (v) => { selected?.materials.forEach((m) => { (m as MeshStandardMaterial).metalness = v; }); restart(); }, fmt: num },
+    "glass.ior": { label: "Refractive index", min: 1, max: 2.33, step: 0.01, get: () => glassUniforms()?.glassIor.value ?? 1.5, set: (v) => { selected?.materials.forEach((m) => { glassOf(m).glassIor.value = v; (m as MeshPhysicalMaterial).ior = v; }); restart(); }, fmt: num },
+    "glass.bounces": { label: "Internal reflections", min: 0, max: 6, step: 0.05, get: () => glassUniforms()?.glassBounces.value ?? 0.8, set: (v) => { selected?.materials.forEach((m) => { glassOf(m).glassBounces.value = v; }); restart(); }, fmt: num },
+    "glass.crease": { label: "Edge sharpness", min: 0, max: 1.5, step: 0.01, get: () => glassUniforms()?.glassCrease.value ?? 0.25, set: (v) => { selected?.materials.forEach((m) => { glassOf(m).glassCrease.value = v; }); restart(); }, fmt: num },
+    "glass.blur": { label: "Internal softness", min: 0, max: 1, step: 0.01, get: () => glassUniforms()?.glassBlur.value ?? 0.12, set: (v) => { selected?.materials.forEach((m) => { glassOf(m).glassBlur.value = v; }); restart(); }, fmt: num },
+    "glass.density": { label: "Tint strength", min: 0, max: 4, step: 0.01, get: () => glassUniforms()?.glassDensity.value ?? 1, set: (v) => { selected?.materials.forEach((m) => { glassOf(m).glassDensity.value = v; }); restart(); }, fmt: num },
+    "glass.roughness": { label: "Frosting", min: 0, max: 1, step: 0.01, get: () => materialOf()?.roughness ?? 0, set: (v) => { selected?.materials.forEach((m) => { (m as MeshStandardMaterial).roughness = v; }); restart(); }, fmt: num },
+    "glass.reflection": { label: "Reflection", min: 0, max: 2, step: 0.01, get: () => glassUniforms()?.glassReflection.value ?? 1, set: (v) => { selected?.materials.forEach((m) => { glassOf(m).glassReflection.value = v; }); restart(); }, fmt: num },
+    "glass.refraction": { label: "Refraction depth", min: 0, max: 3, step: 0.01, get: () => glassUniforms()?.glassRefraction.value ?? 1, set: (v) => { selected?.materials.forEach((m) => { glassOf(m).glassRefraction.value = v; }); restart(); }, fmt: num },
     "mat.sparkle": { label: "Sparkle intensity", min: 0, max: 3, step: 0.01, get: () => SETTINGS.stones.envIntensity, set: (v) => { SETTINGS.stones.envIntensity = v; selected?.materials.forEach((m) => { (m as ShaderMaterial).uniforms.envMapIntensity.value = v; }); restart(); }, fmt: num },
   };
   const slider = (key: string) => {
@@ -172,7 +186,7 @@ export function mountUi(app: HTMLElement) {
     `<div class="seg ${extra}">${options.map(([v, l]) => `<button data-action="seg" data-key="${key}" data-value="${v}" aria-pressed="${v === current}">${l}</button>`).join("")}</div>`;
 
   // ---------- model groups ----------
-  const buildGroups = () => {
+  const buildGroups = (keep?: Mesh) => {
     groups = [];
     const byKey = new Map<string, Group>();
     viewer.model?.root.traverse((o) => {
@@ -184,19 +198,21 @@ export function mountUi(app: HTMLElement) {
         let g = byKey.get(key);
         if (!g) {
           const std = m as MeshStandardMaterial;
-          const tag = diamond ? "Gem" : (std.metalness ?? 0) >= 0.9 ? "Metal" : (m as { transmission?: number }).transmission || m.opacity < 1 ? "Glass" : "Standard";
-          g = { key, name: diamond ? "Diamonds" : m.name || `Material ${byKey.size + 1}`, tag, materials: [], meshes: [], diamond, visible: true };
+          const glass = isGlass(m);
+          const tag = diamond ? "Gem" : glass ? "Glass" : (std.metalness ?? 0) >= 0.9 ? "Metal" : (m as { transmission?: number }).transmission || m.opacity < 1 ? "Glass" : "Standard";
+          g = { key, name: diamond ? "Diamonds" : m.name || `Material ${byKey.size + 1}`, tag, materials: [], meshes: [], diamond, visible: mesh.visible };
           byKey.set(key, g);
           groups.push(g);
-          if (!diamond) std.userData.hexaOriginal ??= { metalness: std.metalness, roughness: std.roughness };
+          if (!diamond && !glass) std.userData.hexaOriginal ??= { metalness: std.metalness, roughness: std.roughness };
         }
         g.materials.push(m);
         g.meshes.push(mesh);
       }
     });
-    selected = groups.find((g) => g.tag === "Metal") ?? groups[0] ?? null;
+    selected = (keep && groups.find((g) => g.meshes.includes(keep))) || groups.find((g) => g.tag === "Metal") || groups[0] || null;
   };
-  const swatch = (g: Group) => (g.diamond ? "#f4f7fb" : `#${(g.materials[0] as MeshStandardMaterial).color?.getHexString() ?? "cccccc"}`);
+  const swatch = (g: Group) =>
+    g.diamond ? "#f4f7fb" : isGlass(g.materials[0]) ? `#${glassOf(g.materials[0]).glassTint.value.getHexString()}` : `#${(g.materials[0] as MeshStandardMaterial).color?.getHexString() ?? "cccccc"}`;
 
   // ---------- rendering of the panel ----------
   const renderFile = () => {
@@ -227,13 +243,18 @@ export function mountUi(app: HTMLElement) {
     const g = selected;
     if (!g) { $("#pane-material").innerHTML = `<div class="placeholder">Select a material in the Scene tab.</div>`; return; }
     const m = g.materials[0] as MeshStandardMaterial;
-    const type = g.diamond ? "gem" : m.metalness >= 0.9 ? "metal" : "standard";
+    const glass = isGlass(m);
+    const type = g.diamond ? "gem" : glass ? "glass" : m.metalness >= 0.9 ? "metal" : "standard";
+    const typeButton = (value: string, label: string, disabled = false) => `<button data-action="mat-type" data-value="${value}" aria-pressed="${type === value}" ${disabled ? "disabled" : ""}>${label}</button>`;
+    const body = g.diamond
+      ? `${slider("mat.sparkle")}<div class="callout">Diamonds use the refraction shader from Jewelry mode. Turn it off in the Scene tab to use the file's own materials.</div>`
+      : glass
+        ? `${slider("glass.bounces")}${slider("glass.crease")}${slider("glass.blur")}${slider("glass.ior")}<div class="val-row"><span>Tint colour</span><input type="color" data-color="glass" value="${swatch(g)}" aria-label="Glass tint colour"></div>${slider("glass.density")}${slider("glass.roughness")}${slider("glass.reflection")}${slider("glass.refraction")}`
+        : `<div class="val-row"><span>Colour</span><input type="color" data-color="mat" value="${swatch(g)}" aria-label="Material colour"></div>${slider("mat.roughness")}${slider("mat.metalness")}`;
     $("#pane-material").innerHTML = `<div class="card">
       <h3>${esc(g.name)}<span class="val-row" style="gap:6px;font-weight:400;font-size:12px;color:var(--muted)"><span class="sw-dot" style="width:14px;height:14px;border-radius:5px;border:1px solid var(--line);background:${swatch(g)}"></span>${swatch(g).toUpperCase()}</span></h3>
-      <div class="seg"><button data-action="mat-type" data-value="standard" aria-pressed="${type === "standard"}" ${g.diamond ? "disabled" : ""}>Standard</button><button data-action="mat-type" data-value="metal" aria-pressed="${type === "metal"}" ${g.diamond ? "disabled" : ""}>Metal</button><button aria-pressed="${type === "gem"}" disabled>Gem</button></div>
-      ${g.diamond
-        ? `${slider("mat.sparkle")}<div class="callout">Diamonds use the refraction shader from Jewelry mode. Turn it off in the Scene tab to use the file's own materials.</div>`
-        : `<div class="val-row"><span>Colour</span><input type="color" data-color="mat" value="${swatch(g)}" aria-label="Material colour"></div>${slider("mat.roughness")}${slider("mat.metalness")}`}
+      <div class="seg">${typeButton("standard", "Standard", g.diamond)}${typeButton("metal", "Metal", g.diamond)}${typeButton("glass", "Glass", g.diamond)}${g.diamond ? typeButton("gem", "Gem", true) : ""}</div>
+      ${body}
     </div>`;
   };
 
@@ -246,7 +267,7 @@ export function mountUi(app: HTMLElement) {
         ${slider("env.rotation")}${slider("env.intensity")}${toggle("env.lock")}
         <div class="val-row"><span>Background</span>${background === "colour" ? `<input type="color" data-color="bg" value="${backgroundColour}" aria-label="Background colour">` : ""}${seg("bg", [["white", "White"], ["clear", "Clear"], ["colour", "Colour"]], background, "small inline")}</div>
       </div>
-      <div class="card"><h3>Ground shadow ${toggle("shadow.on", true)}</h3>${slider("shadow.opacity")}${slider("shadow.softness")}</div>`;
+      <div class="card"><h3>Ground shadow ${toggle("shadow.on", true)}</h3>${slider("shadow.opacity")}${slider("shadow.softness")}${slider("shadow.caustics")}</div>`;
   };
 
   const renderRender = () => {
@@ -321,6 +342,20 @@ export function mountUi(app: HTMLElement) {
       renderScene();
     },
     "mat-type": (el) => {
+      const group = selected;
+      if (!group) return;
+      const wasGlass = group.tag === "Glass" && isGlass(group.materials[0]);
+      // Glass is a different material: swap it in or out first, then rebuild the list around the same mesh.
+      if (el.dataset.value === "glass") {
+        if (wasGlass) return;
+        viewer.applyGlass(group.meshes);
+        viewer.ground.bake(viewer.renderer, viewer.scene); // glass casts a lighter shadow
+        buildGroups(group.meshes[0]);
+        renderScene();
+        renderMaterial();
+        return;
+      }
+      if (wasGlass) { viewer.restoreMaterials(group.meshes); viewer.ground.bake(viewer.renderer, viewer.scene); buildGroups(group.meshes[0]); renderScene(); }
       const original = (selected?.materials[0] as MeshStandardMaterial | undefined)?.userData.hexaOriginal as { metalness: number; roughness: number } | undefined;
       selected?.materials.forEach((m) => {
         const std = m as MeshStandardMaterial;
@@ -379,8 +414,17 @@ export function mountUi(app: HTMLElement) {
   app.addEventListener("change", (e) => {
     const input = e.target as HTMLInputElement;
     if (input.dataset.slider && SLIDERS[input.dataset.slider].commit) SLIDERS[input.dataset.slider].set(Number(input.value));
+    const key = input.dataset.slider ?? "";
+    // The caustics depend on the glass settings (tint, index), so they are baked again when a glass slider is released.
+    if (key.startsWith("glass.") && SETTINGS.groundShadow.caustics > 0 && viewer.model) viewer.ground.bake(viewer.renderer, viewer.scene);
     if (input.dataset.switch) { SWITCHES[input.dataset.switch].set(input.checked); }
     if (input.dataset.color === "bg") { backgroundColour = input.value; viewer.pipeline.setBackground("colour", backgroundColour); }
+    if (input.dataset.color === "glass" && selected) {
+      selected.materials.forEach((m) => glassOf(m).glassTint.value.set(input.value));
+      restart();
+      renderScene();
+      renderMaterial();
+    }
     if (input.dataset.color === "mat" && selected) {
       selected.materials.forEach((m) => (m as MeshStandardMaterial).color.set(input.value));
       restart();
@@ -441,6 +485,17 @@ export function mountUi(app: HTMLElement) {
     },
     /** Start a load from code (used by ?sample). */
     loadSample: () => run((onStep) => viewer.loadSample({ onStep })),
+    /** The page's default model: the perfume bottle, with glass applied. */
+    loadDefault: async () => {
+      await run((onStep) => viewer.loadUrl(PATHS.bottle, "bottle-glass.glb", { onStep, glass: true }));
+      // A product-shot view: the camera a little above the bottle, so the base and the neck opening show as ellipses.
+      viewer.controls.minDistance = 0;
+      viewer.camera.position.set(0, 3.2, 10.2);
+      viewer.controls.update();
+      currentEnv = "glass-studio";
+      await viewer.setEnvironment(GLASS_STUDIO);
+      if (viewer.model) renderEnvironment();
+    },
   };
 }
 
