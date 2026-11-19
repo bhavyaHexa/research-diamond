@@ -3,6 +3,10 @@
 export const PATHS = {
   ring: "/assets/Ring_v1.glb",
   bottle: "/assets/Glass_With_Room.glb",
+  bottleOnly: "/assets/bottle-glass.glb",
+  room: "/assets/room/Room_V2.11.glb",
+  roomLightMaps: "/assets/room/lightMaps/",
+  roomLightMapConfig: "/assets/room/modelToLightMap.json",
   scenePreset: "/assets/scene/designer-scene.vjson",
   gemEnvironment: "/assets/scene/gem-000.hdr",
   lightmap: "/assets/scene/lightmap-r-2b.hdr",

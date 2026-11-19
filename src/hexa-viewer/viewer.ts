@@ -43,6 +43,8 @@ export interface LoadOptions {
   glass?: boolean | ((mesh: Mesh) => boolean);
   /** Name of the part to frame (a bottle in a room): the model is scaled and centred on it, and the camera orbits it. */
   focus?: string;
+  /** Runs on the loaded model before it enters the scene (the room adds its lightmaps and bottle here). */
+  decorate?: (root: Group) => Promise<void>;
 }
 
 export interface HexaViewer {
@@ -178,7 +180,7 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
       const mesh = o as Mesh;
       if (!mesh.isMesh) return;
       for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-        if ((m as { isMeshStandardMaterial?: boolean }).isMeshStandardMaterial) enableSsr(m as never);
+        if ((m as { isMeshStandardMaterial?: boolean }).isMeshStandardMaterial && !m.userData.baked) enableSsr(m as never);
       }
     });
   };
@@ -240,6 +242,7 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
     const step = async (i: number) => { options.onStep?.(i); await pause(); };
     await step(0);
     const { root, name, bytes } = await readModel(files);
+    await options.decorate?.(root);
 
     await step(1);
     const available = jewelryNames(root);

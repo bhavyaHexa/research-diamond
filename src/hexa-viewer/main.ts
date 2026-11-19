@@ -23,6 +23,7 @@ startHexaViewer(ui.canvas).then((viewer) => {
   if (import.meta.env.DEV) void import("./environments").then((e) => { (window as unknown as { hexaDev: Record<string, unknown> }).hexaDev.studio = (look: object) => viewer.setEnvironment(e.createGlassStudio({ ...e.DEFAULT_STUDIO, ...look })); });
   // `?sample`: the ring. `?empty`: nothing. Otherwise: the perfume bottle with glass.
   if (query.has("sample")) void ui.loadSample();
+  else if (query.has("room")) void ui.loadRoom();
   else if (!query.has("empty")) void ui.loadDefault();
   const loop = () => {
     viewer.tick();

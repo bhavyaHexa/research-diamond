@@ -1,10 +1,11 @@
 // The viewer's interface: a stage with the model and one docked panel on the right.
 // Plain DOM. State lives in `viewer` and SETTINGS; the panel only reads and writes them.
-import type { Material, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, ShaderMaterial } from "three";
+import { Vector3, type Material, type Mesh, type MeshPhysicalMaterial, type MeshStandardMaterial, type ShaderMaterial } from "three";
 import { PATHS, SCENE_ENVIRONMENTS } from "../../constants";
 import { DIAMOND_TAG } from "../../render/diamond";
 import { GLASS_STUDIO } from "../environments";
 import { glassOf, isGlass } from "../glass";
+import { decorateRoom } from "../room";
 import { SETTINGS } from "../settings";
 import { LOAD_STEPS, type HexaViewer, type ModelInfo } from "../viewer";
 import { icon } from "./icons";
@@ -66,6 +67,10 @@ export function mountUi(app: HTMLElement) {
             </div>
             <span class="note">${icon("lock", 13, 2)}Files stay in your browser and are never sent to a server.</span>
           </div>
+          <button class="sample" data-action="room">
+            <span class="meta"><span class="tag">Scene</span><b>Glass bottle in a baked room</b><span>Hotel room with baked lightmaps · 57 MB</span></span>
+            ${icon("chevron", 18, 2)}
+          </button>
           <button class="sample" data-action="sample">
             <span class="thumb" style="background-image:url(/assets/sample-thumb.png)"></span>
             <span class="meta"><span class="tag">Sample</span><b>Halo diamond ring</b><span>Gold band, 45 diamonds · 3.6 MB · opens in Jewelry mode</span></span>
@@ -79,6 +84,7 @@ export function mountUi(app: HTMLElement) {
       <div class="p-head">
         <div class="logo">${icon("hex", 16, 2)}</div>
         <span class="title">Hexa 3D Viewer</span>
+        <button class="btn small" data-action="room" title="The glass bottle in the baked hotel room">Room</button>
         <button class="btn primary small" data-action="browse">${icon("upload", 15, 2)}Upload</button>
       </div>
       <div id="file-slot"></div>
@@ -323,10 +329,28 @@ export function mountUi(app: HTMLElement) {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
 
+  /** The glass bottle on the table of the baked room (a separate option next to the default bottle scene). */
+  const loadRoom = async () => {
+    await run((onStep) => viewer.loadUrl(PATHS.room, "Room_V2.11.glb", { onStep, decorate: decorateRoom, glass: (mesh) => mesh.name === "bottle_glass", focus: "bottle_glass" }));
+    // The room's own view direction (Room_V1.json camera), pulled in to a product-shot distance from the bottle.
+    const root = viewer.model!.root;
+    const at = new Vector3().setFromMatrixPosition(root.getObjectByName("bottle_glass")!.matrixWorld);
+    const dir = root.localToWorld(new Vector3(-0.3, 1.22, 5.68)).sub(at).normalize();
+    viewer.controls.minDistance = 0;
+    viewer.controls.maxDistance = 120;
+    viewer.camera.position.copy(at).addScaledVector(dir, 30).add(new Vector3(0, 5, 0));
+    viewer.controls.update();
+    await viewer.setEnvironment(GLASS_STUDIO);
+    viewer.setSceneReflections(true);
+    currentEnv = "scene-room";
+    if (viewer.model) renderEnvironment();
+  };
+
   // ---------- events ----------
   const actions: Record<string, (el: HTMLElement) => void | Promise<void>> = {
     browse: () => fileInput.click(),
     sample: () => run((onStep) => viewer.loadSample({ onStep })),
+    room: () => loadRoom(),
     link: () => { const row = $("#link-row"); row.hidden = !row.hidden; if (!row.hidden) $<HTMLInputElement>("#link-input").focus(); },
     "load-link": () => run(async (onStep) => {
       const url = $<HTMLInputElement>("#link-input").value.trim();
@@ -494,6 +518,7 @@ export function mountUi(app: HTMLElement) {
     /** Start a load from code (used by ?sample). */
     loadSample: () => run((onStep) => viewer.loadSample({ onStep })),
     /** The page's default model: the perfume bottle, with glass applied. */
+    loadRoom,
     loadDefault: async () => {
       await run((onStep) => viewer.loadUrl(PATHS.bottle, "Glass_With_Room.glb", { onStep, glass: (mesh) => mesh.name === "bottle_glass", focus: "bottle_glass" }));
       // A product-shot view: the camera a little above the bottle, so the base and the neck opening show as ellipses.

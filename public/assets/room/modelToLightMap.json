@@ -1,0 +1,20 @@
+{
+    "Bed#Bed": "Bed_DIFFUSE.jpg",
+    "Bed#Sheets": "Bed_DIFFUSE.jpg",
+    "Curtains#Curtains": "Curtains_DIFFUSE.jpg",
+    "Curtains#EGE Atlas": "Curtains_DIFFUSE.jpg",
+    "EGE Atlas#EGE Atlas": "Misc2_DIFFUSE.png",
+    "EGE Texture Atlas 1 Room 1#EGE Texture Atlas 1 Room 1": "Misc1_DIFFUSE.png",
+    "EGE Texture Atlas 2 Room 1#Blanket": "Misc1_DIFFUSE.png",
+    "EGE Texture Atlas 2 Room 1#EGE Texture Atlas 2 Room 1": "Misc1_DIFFUSE.png",
+    "Floor#Floor Room 2": "Floor_DIFFUSE2.png",
+    "Walls 1#EGE Atlas": "Walls_1_DIFFUSE.png",
+    "Walls 2#EGE Atlas": "Walls_2_DIFFUSE1.webp",
+    "Walls 3#EGE Atlas": "Walls_3_DIFFUSE.png",
+    "Armchair": "Chair_Light2.webp",
+    "books": "Painting & Table (1).webp",
+    "table_lags": "Painting & Table (1).webp",
+    "table_wood ": "Painting & Table (1).webp",
+    "vase": "Painting & Table (1).webp",
+    "table-base": "Painting & Table (1).webp"
+}
