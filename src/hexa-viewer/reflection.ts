@@ -48,6 +48,9 @@ export class PlanarReflection {
 
   dispose() { this.target.dispose(); this.blank.dispose(); this.ghost.dispose(); }
 
+  /** Switch the mirror image on or off without redrawing it (used while the room is captured into a cubemap). */
+  setMirrorStrength(value: number) { this.uniforms.floorReflectionStrength.value = value; }
+
   resize(width: number, height: number) {
     this.target.setSize(width, height);
     this.uniforms.floorReflectionTexel.value.set(1 / width, 1 / height);

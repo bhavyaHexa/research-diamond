@@ -1,8 +1,8 @@
 // The Hexa 3D Viewer: plain three.js scene + src/hexa-viewer/pipeline.ts for the frame.
 // Nothing here touches the vendored engine. Models come from files the user gives it (or the sample ring).
 import {
-  Box3, EquirectangularReflectionMapping, Group, Material, Matrix4, Mesh, PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera, Quaternion, Scene,
-  Texture, Vector3, WebGLRenderer,
+  Box3, CubeCamera, EquirectangularReflectionMapping, Group, HalfFloatType, Material, Matrix4, Mesh, Object3D, PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera, Quaternion, Scene,
+  Texture, Vector3, WebGLCubeRenderTarget, WebGLRenderer,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
@@ -76,6 +76,9 @@ export interface HexaViewer {
   restoreMaterials(meshes: Mesh[]): void;
   /** A .hdr or .exr file (or URL) lights the model and its reflections. Returns the name and pixel width. */
   setEnvironment(source: string | File | Texture): Promise<{ name: string; width: number }>;
+  /** Separate option: light the glass with a cubemap of the SCENE (the room around the bottle) instead of the studio map, so the glass blends with the room. Off by default. */
+  setSceneReflections(on: boolean): void;
+  readonly sceneReflections: boolean;
   /** PNG of the current frame (transparent where nothing is drawn if the background is "clear"). */
   capture(): Promise<Blob>;
   /** Square data URL of the middle of the current frame, for the file card. */
@@ -141,6 +144,11 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
     cameraRotation.multiply(yaw);
     scene.environmentRotation.setFromRotationMatrix(cameraRotation);
   };
+
+  // The studio map and the cubemap of the scene (PMREM), either of which can light the glass.
+  let studioEnvironment: Texture | null = null;
+  let sceneEnvironment: Texture | null = null;
+  let saved: { mode: typeof envMode.value; yaw: number } | null = null;
 
   // ---- the model on screen ----
   let current: { root: Group; info: ModelInfo; files: File[]; sample: boolean } | null = null;
@@ -219,6 +227,7 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
   };
 
   const removeCurrent = () => {
+    if (viewer.sceneReflections) viewer.setSceneReflections(false);   // the cubemap belongs to the old scene
     clearMirrors();
     removeFloorReflection();
     if (!current) return;
@@ -355,14 +364,49 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
     async setEnvironment(source) {
       const { name, texture } = await loadEquirect(source);
       const pmrem = new PMREMGenerator(renderer);
-      const previous = scene.environment;
-      scene.environment = pmrem.fromEquirectangular(texture).texture;
+      const previous = studioEnvironment;
+      studioEnvironment = pmrem.fromEquirectangular(texture).texture;
+      if (!viewer.sceneReflections) scene.environment = studioEnvironment;
       previous?.dispose();
       pmrem.dispose();
       const width = (texture.image as { width?: number } | undefined)?.width ?? 0;
       texture.dispose();
       pipeline.restart();
       return { name, width };
+    },
+    sceneReflections: false,
+    setSceneReflections(on) {
+      if (on === viewer.sceneReflections) return;
+      (viewer as { sceneReflections: boolean }).sceneReflections = on;
+      if (on) {
+        // A cubemap of the scene as seen from the middle of the focus (the bottle), without the glass, its mirror copies, the
+        // shadow plane or the floor's own mirror image. The environment must then stay fixed in the world.
+        saved = { mode: envMode.value, yaw: SETTINGS.environment.rotationY };
+        const target = new WebGLCubeRenderTarget(512, { type: HalfFloatType, generateMipmaps: false });
+        const cubeCamera = new CubeCamera(0.01, 400, target);
+        cubeCamera.position.set(0, 0, 0);
+        const hidden: [Object3D, boolean][] = [];
+        scene.traverse((o) => {
+          const mesh = o as Mesh;
+          if (mesh.isMesh && ((!Array.isArray(mesh.material) && isGlass(mesh.material)) || mesh.userData.reflection)) { hidden.push([mesh, mesh.visible]); mesh.visible = false; }
+        });
+        hidden.push([ground.mesh, ground.mesh.visible]); ground.mesh.visible = false;
+        floorReflection?.setMirrorStrength(0);
+        cubeCamera.update(renderer, scene);
+        for (const [o, visible] of hidden) o.visible = visible;
+        const pmrem = new PMREMGenerator(renderer);
+        sceneEnvironment?.dispose();
+        sceneEnvironment = pmrem.fromCubemap(target.texture).texture;
+        pmrem.dispose();
+        target.dispose();
+        envMode.value = "world";
+        SETTINGS.environment.rotationY = 0;
+        scene.environment = sceneEnvironment;
+      } else {
+        scene.environment = studioEnvironment;
+        if (saved) { envMode.value = saved.mode; SETTINGS.environment.rotationY = saved.yaw; }
+      }
+      pipeline.restart();
     },
     capture() {
       viewer.tick();

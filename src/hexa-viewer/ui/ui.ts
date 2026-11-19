@@ -32,10 +32,13 @@ interface Group {
   visible: boolean;
 }
 
+/** Marks the environment entry that is a cubemap of the loaded scene (see viewer.setSceneReflections). */
+const SCENE_CUBEMAP = "scene:cubemap";
 interface Environment { id: string; name: string; chip: string; background: string; source: string | File }
 
 const STUDIO = "linear-gradient(160deg, #E3EAF4 0%, #A9B8CE 55%, #55627A 100%)";
 const WARM = "linear-gradient(160deg, #F2E6D2 0%, #B89A6A 55%, #4A3B2A 100%)";
+const ROOM = "linear-gradient(160deg, #ECE0CB 0%, #C9AE80 38%, #6B5439 72%, #1E1812 100%)";
 const GLASS = "linear-gradient(90deg, #15171c 0%, #15171c 14%, #ffffff 17%, #ffffff 22%, #2a2d33 26%, #e8eaee 55%, #ffffff 68%, #15171c 80%, #15171c 90%, #cfd3da 100%)";
 const COOL ="linear-gradient(160deg, #CFE3FA 0%, #8DB4DE 55%, #5F7FA3 100%)";
 
@@ -121,6 +124,7 @@ export function mountUi(app: HTMLElement) {
   let backgroundColour = "#ffffff";
   let currentEnv = SCENE_ENVIRONMENTS[0].id as string;
   const environments: Environment[] = [
+    { id: "scene-room", name: "Scene (room)", chip: "Cubemap", background: ROOM, source: SCENE_CUBEMAP },
     { id: "glass-studio", name: "Glass studio", chip: "Procedural", background: GLASS, source: GLASS_STUDIO },
     { id: SCENE_ENVIRONMENTS[0].id, name: "Studio", chip: "HDR", background: STUDIO, source: SCENE_ENVIRONMENTS[0].url },
     { id: SCENE_ENVIRONMENTS[1].id, name: "Metal 001", chip: "HDR", background: WARM, source: SCENE_ENVIRONMENTS[1].url },
@@ -166,7 +170,7 @@ export function mountUi(app: HTMLElement) {
 
   interface SwitchDef { label: string; hint?: () => string; get(): boolean; set(on: boolean): void; disabled?: () => boolean }
   const SWITCHES: Record<string, SwitchDef> = {
-    "env.lock": { label: "Lock to camera", get: () => viewer.envMode.value === "inverse", set: (on) => { viewer.envMode.value = on ? "inverse" : "world"; restart(); } },
+    "env.lock": { label: "Lock to camera", disabled: () => viewer.sceneReflections, get: () => viewer.envMode.value === "inverse", set: (on) => { viewer.envMode.value = on ? "inverse" : "world"; restart(); } },
     "shadow.on": { label: "Ground shadow", get: () => SETTINGS.groundShadow.enabled, set: (on) => { SETTINGS.groundShadow.enabled = on; viewer.ground.setVisible(on); restart(); } },
     "fx.ssr": { label: "Screen-space reflections", get: () => SETTINGS.ssr.intensity > 0, set: (on) => { SETTINGS.ssr.intensity = on ? 1 : 0; applyLook(); } },
     "fx.ao": { label: "Ambient occlusion", get: () => SETTINGS.ssao.intensity > 0, set: (on) => { SETTINGS.ssao.intensity = on ? 0.1 : 0; applyLook(); } },
@@ -259,6 +263,8 @@ export function mountUi(app: HTMLElement) {
   };
 
   const renderEnvironment = () => {
+    // The room cubemap belongs to the model it was taken from: after another model is loaded the studio map is back.
+    if (currentEnv === "scene-room" && !viewer.sceneReflections) currentEnv = "glass-studio";
     const env = environments.find((e) => e.id === currentEnv) ?? environments[0];
     $("#pane-environment").innerHTML = `
       <div class="card">
@@ -368,8 +374,9 @@ export function mountUi(app: HTMLElement) {
       const env = environments.find((e) => e.id === el.dataset.id);
       if (!env || env.id === currentEnv) return;
       currentEnv = env.id;
+      if (env.source === SCENE_CUBEMAP) viewer.setSceneReflections(true);
+      else { viewer.setSceneReflections(false); await viewer.setEnvironment(env.source); }
       renderEnvironment();
-      await viewer.setEnvironment(env.source);
     },
     "env-upload": () => hdrInput.click(),
     seg: (el) => {
@@ -437,6 +444,7 @@ export function mountUi(app: HTMLElement) {
     hdrInput.value = "";
     if (!file) return;
     try {
+      viewer.setSceneReflections(false);
       const { width } = await viewer.setEnvironment(file);
       const id = `upload-${environments.length}`;
       environments.push({ id, name: file.name.replace(/\.[^.]+$/, ""), chip: `${width >= 1024 ? `${Math.round(width / 1024)}K` : width} · ${file.name.split(".").pop()!.toUpperCase()}`, background: COOL, source: file });
@@ -492,8 +500,10 @@ export function mountUi(app: HTMLElement) {
       viewer.controls.minDistance = 0;
       viewer.camera.position.set(0, 3.2, 10.2);
       viewer.controls.update();
-      currentEnv = "glass-studio";
+      // The glass studio is loaded as the fallback; the default light for the glass is a cubemap of the room around it.
       await viewer.setEnvironment(GLASS_STUDIO);
+      viewer.setSceneReflections(true);
+      currentEnv = "scene-room";
       if (viewer.model) renderEnvironment();
     },
   };
