@@ -158,8 +158,9 @@ export class GlassPass {
    */
   render(renderer: WebGLRenderer, scene: Scene, camera: Camera, glass: Mesh[], sceneTarget: WebGLRenderTarget) {
     const keep = new Set(glass);
+    const layered = glass.filter((mesh) => !mesh.userData.reflection);
     const bounds = new Box3();
-    glass.forEach((m) => bounds.expandByObject(m));
+    layered.forEach((m) => bounds.expandByObject(m));
     const depthRef = camera.position.distanceTo(bounds.getCenter(new Vector3()));
     glassUniforms.glassDepthRef.value = depthRef;
     this.layerUniforms.depthRef.value = depthRef;
@@ -174,7 +175,7 @@ export class GlassPass {
     this.back2Material.uniforms.tPrev.value = this.back1.texture;
     renderer.setClearColor(0x000000, 0);
     const previousOverride = scene.overrideMaterial;
-    this.only(scene, keep, () => {
+    this.only(scene, new Set(layered), () => {
       for (const [target, material] of [
         [this.front1, this.front1Material], [this.back1, this.back1Material],
         [this.front2, this.front2Material], [this.back2, this.back2Material],

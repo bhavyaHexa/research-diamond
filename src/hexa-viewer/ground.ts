@@ -42,6 +42,8 @@ export interface Ground {
   /** Caustic strength under glass (0 = off, 1 = physical). Rebake after changing it to or from 0. */
   setCaustics(value: number): void;
   setVisible(on: boolean): void;
+  /** The transparent shadow plane. */
+  readonly mesh: Mesh;
 }
 
 export function addLightAndGround(scene: Scene, groundY: number): Ground {
@@ -216,5 +218,6 @@ export function addLightAndGround(scene: Scene, groundY: number): Ground {
       causticStrength.value = value;
     },
     setVisible(on) { ground.visible = on; },
+    get mesh() { return ground; },
   };
 }

@@ -14,6 +14,7 @@ import bloomFrag from "./shaders/bloom.frag.glsl?raw";
 import compositeFrag from "./shaders/composite.frag.glsl?raw";
 import debugFrag from "./shaders/debug.frag.glsl?raw";
 import { GlassPass, glassUniforms } from "./glass";
+import type { PlanarReflection } from "./reflection";
 import { SETTINGS } from "./settings";
 import { DepthPrepass, ssrUniforms } from "./ssr";
 import { Ssao } from "./ssao";
@@ -48,6 +49,8 @@ export class Pipeline {
   private height = 0;
   /** Frames accumulated so far; restarts when the camera moves. */
   frame = 0;
+  /** The mirror image for the floor of a room model (null when the model has none). */
+  reflection: PlanarReflection | null = null;
 
   private readonly accumulate = this.fullscreen(accumulateFrag, { tHistory: { value: null }, tFrame: { value: null }, weight: { value: 1 } });
   private readonly bloom = [0, 1, 2].map((step) =>
@@ -97,6 +100,7 @@ export class Pipeline {
       this.bloomLevels.push(target(lw, lh));
       this.bloomUp.push(target(lw, lh));
     }
+    this.reflection?.resize(w, h);
     this.restart();
   }
 
@@ -126,6 +130,9 @@ export class Pipeline {
     this.restart();
   }
 
+  /** Size of the frame in pixels. */
+  get size(): [number, number] { return [this.width, this.height]; }
+
   get converged() { return this.frame >= SETTINGS.accumulationFrames; }
 
   /** Render one more jittered frame into the running average, then present it. */
@@ -153,6 +160,9 @@ export class Pipeline {
       this.renderer.setClearColor(0x000000, 0);
       this.renderer.setRenderTarget(this.sceneTarget);
       this.renderer.clear();
+      // The mirror image of the room for the floor (before the main picture, which reads it).
+      this.reflection?.render(this.renderer, scene, camera);
+      this.renderer.setRenderTarget(this.sceneTarget);
       // Glass is drawn after everything else, so it can refract the finished scene (see glass.ts).
       const glass = GlassPass.meshes(scene);
       glass.forEach((m) => (m.visible = false));

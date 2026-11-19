@@ -1,6 +1,6 @@
 // Reading a model file into a three.js Group, measuring it, and placing it in the scene.
 // GLB, and GLTF with its separate .bin / textures (drop all the files together). Everything is read in the browser.
-import { Box3, BufferGeometry, Group, LoadingManager, Material, Mesh, Texture, Vector3 } from "three";
+import { Box3, BufferGeometry, Group, LoadingManager, Material, Mesh, Object3D, Texture, Vector3 } from "three";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
@@ -55,16 +55,19 @@ export function measureModel(root: Group): ModelStats {
 }
 
 /** Scale the model so its longest side is REFERENCE_SIZE, put its centre at the origin (the camera orbits the origin) and return the height of its lowest point. */
-export function fitToReference(root: Group): number {
-  const box = new Box3().setFromObject(root);
+export function fitToReference(root: Group, focus?: Object3D): number {
+  // `focus`: fit and centre on this part only (the bottle in a room), so the camera frames it and the rest of the model is just around it.
+  const target = focus ?? root;
+  root.updateMatrixWorld(true);
+  const box = new Box3().setFromObject(target);
   const size = box.getSize(new Vector3());
   const longest = Math.max(size.x, size.y, size.z);
   if (longest > 0) root.scale.multiplyScalar(REFERENCE_SIZE / longest);
   root.updateMatrixWorld(true);
-  box.setFromObject(root);
+  box.setFromObject(target);
   root.position.sub(box.getCenter(new Vector3()));
   root.updateMatrixWorld(true);
-  return new Box3().setFromObject(root).min.y;
+  return new Box3().setFromObject(target).min.y;
 }
 
 /** The sample ring keeps its authored placement; this only undoes an export made ~10x too big. */

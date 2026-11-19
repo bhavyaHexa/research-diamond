@@ -487,7 +487,7 @@ export function mountUi(app: HTMLElement) {
     loadSample: () => run((onStep) => viewer.loadSample({ onStep })),
     /** The page's default model: the perfume bottle, with glass applied. */
     loadDefault: async () => {
-      await run((onStep) => viewer.loadUrl(PATHS.bottle, "bottle-glass.glb", { onStep, glass: true }));
+      await run((onStep) => viewer.loadUrl(PATHS.bottle, "Glass_With_Room.glb", { onStep, glass: (mesh) => mesh.name === "bottle_glass", focus: "bottle_glass" }));
       // A product-shot view: the camera a little above the bottle, so the base and the neck opening show as ellipses.
       viewer.controls.minDistance = 0;
       viewer.camera.position.set(0, 3.2, 10.2);

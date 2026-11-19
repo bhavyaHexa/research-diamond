@@ -41,6 +41,7 @@ vec3 glassNormal(vec4 layer, float side) {
 }
 
 vec4 glassShade(vec3 reflection, vec3 N, vec3 P) {
+  vec4 result = vec4(0.0);
   vec3 incident = normalize(P);    // camera -> surface, view space
   float cosI = clamp(dot(N, -incident), 0.0, 1.0);
   float f0 = pow((glassIor - 1.0) / (glassIor + 1.0), 2.0);
@@ -134,11 +135,13 @@ vec4 glassShade(vec3 reflection, vec3 N, vec3 P) {
   // (Not at grazing angles: the silhouette always turns the normal fast and is handled by the edge reflections.)
   float crease = glassCrease * smoothstep(0.04, 0.25, length(fwidth(N))) * smoothstep(0.3, 0.6, cosI);
   alpha = max(alpha, 0.7 * min(crease, 1.0));
-  vec4 result = vec4(reflection * glassReflection * (1.0 + 6.0 * crease) + inside, alpha);
   if (glassFade.y > 0.0) {
-    // The mirror image under the floor fades out with distance from it, like a reflection in a glossy floor.
     float depthBelow = max(glassFade.x - (inverse(viewMatrix) * vec4(P, 1.0)).y, 0.0);
-    result *= glassFade.z * exp(-depthBelow / glassFade.y);
+    float fade = glassFade.z * exp(-depthBelow / glassFade.y);
+    vec4 background = texture2D(tRefraction, clamp(uv, 0.001, 0.999));
+    result = vec4(background.rgb + reflection * glassReflection * fade, background.a);
+  } else {
+    result = vec4(reflection * glassReflection * (1.0 + 6.0 * crease) + inside, alpha);
   }
   return result;
 }

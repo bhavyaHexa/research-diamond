@@ -1,7 +1,7 @@
 // The Hexa 3D Viewer: plain three.js scene + src/hexa-viewer/pipeline.ts for the frame.
 // Nothing here touches the vendored engine. Models come from files the user gives it (or the sample ring).
 import {
-  EquirectangularReflectionMapping, Group, Material, Matrix4, Mesh, PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera, Quaternion, Scene,
+  Box3, EquirectangularReflectionMapping, Group, Material, Matrix4, Mesh, PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera, Quaternion, Scene,
   Texture, Vector3, WebGLRenderer,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -17,6 +17,7 @@ import { slug } from "../utils";
 import { GLASS_STUDIO, createGlassStudio } from "./environments";
 import { createGlassMaterial, glassOf, isGlass } from "./glass";
 import { Pipeline } from "./pipeline";
+import { PlanarReflection } from "./reflection";
 import { addLightAndGround } from "./ground";
 import { disposeModel, fitToReference, measureModel, placeSample, readModel, type ModelStats } from "./model";
 import { enableSsr } from "./ssr";
@@ -38,8 +39,10 @@ export interface LoadOptions {
   onStep?: (step: number) => void;
   /** Force Jewelry mode on or off. Default: on when the file has the ring's stone names. */
   jewelry?: boolean;
-  /** Give every mesh of the model the glass material once it is loaded. */
-  glass?: boolean;
+  /** Give every mesh, or only selected meshes, the glass material once loaded. */
+  glass?: boolean | ((mesh: Mesh) => boolean);
+  /** Name of the part to frame (a bottle in a room): the model is scaled and centred on it, and the camera orbits it. */
+  focus?: string;
 }
 
 export interface HexaViewer {
@@ -172,17 +175,17 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
     });
   };
 
-  // The floor reflection: a mirrored copy of every glass mesh under the ground, drawn by the glass pass with a fade.
+  // The floor reflection: mirrored glass meshes just below their own bases, drawn with a fade.
   const mirrors: Mesh[] = [];
   const clearMirrors = () => { mirrors.splice(0).forEach((m) => { m.removeFromParent(); (m.material as Material).dispose(); }); };
   const addMirrors = (meshes: Mesh[], glass: Material) => {
     clearMirrors();
-    const y = ground.height;
-    const flip = new Matrix4().makeTranslation(0, y, 0).multiply(new Matrix4().makeScale(1, -1, 1)).multiply(new Matrix4().makeTranslation(0, -y, 0));
-    const material = createGlassMaterial("reflection", undefined, glassOf(glass), new Vector3(y, SETTINGS.floorReflection.length, SETTINGS.floorReflection.strength));
     for (const mesh of meshes) {
       if (Array.isArray(mesh.material)) continue;
       mesh.updateWorldMatrix(true, false);
+      const y = new Box3().setFromObject(mesh).min.y;
+      const flip = new Matrix4().makeTranslation(0, y, 0).multiply(new Matrix4().makeScale(1, -1, 1)).multiply(new Matrix4().makeTranslation(0, -y, 0));
+      const material = createGlassMaterial("reflection", undefined, glassOf(glass), new Vector3(y, SETTINGS.floorReflection.length, SETTINGS.floorReflection.strength));
       const mirror = new Mesh(mesh.geometry, material);
       mirror.matrixAutoUpdate = false;
       mirror.matrix.copy(flip).multiply(mesh.matrixWorld);
@@ -195,8 +198,29 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
     }
   };
 
+  // Floors of a room model: every material called "Calacatta..." (the marble slab under the bottle and the floor of the room are different meshes) shows a mirror image.
+  let floorReflection: PlanarReflection | null = null;
+  const removeFloorReflection = () => { pipeline.reflection = null; floorReflection?.dispose(); floorReflection = null; };
+  const addFloorReflection = (root: Group) => {
+    const floors = new Set<Material>();
+    root.traverse((o) => {
+      const mesh = o as Mesh;
+      if (!mesh.isMesh) return;
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) if (/calacatta/i.test(m.name)) floors.add(m);
+    });
+    if (floors.size === 0) return;
+    const [w, h] = pipeline.size;
+    floorReflection = new PlanarReflection(w, h);
+    floorReflection.planeY = ground.height;
+    floorReflection.hide = [ground.mesh];
+    floors.forEach((m) => floorReflection!.patch(m));
+    pipeline.reflection = floorReflection;
+    clearMirrors();            // the mirror image comes from the floor now, not from copies under the ground
+  };
+
   const removeCurrent = () => {
     clearMirrors();
+    removeFloorReflection();
     if (!current) return;
     scene.remove(current.root);
     disposeModel(current.root);
@@ -216,15 +240,22 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
     prepareMaterials(root, jewelryMode);
 
     await step(2);
-    ground.setHeight(sample ? placeSample(root) : fitToReference(root));
+    const focus = options.focus ? root.getObjectByName(options.focus) ?? undefined : undefined;
+    ground.setHeight(sample ? placeSample(root) : fitToReference(root, focus));
     resetCamera();
 
-    if (options.glass) {
+    const glassOption = options.glass;
+    if (glassOption) {
       await step(3);
       const meshes: Mesh[] = [];
-      root.traverse((o) => { if ((o as Mesh).isMesh) meshes.push(o as Mesh); });
+      root.traverse((o) => {
+        const mesh = o as Mesh;
+        if (mesh.isMesh && (glassOption === true || (typeof glassOption === "function" && glassOption(mesh)))) meshes.push(mesh);
+      });
       viewer.applyGlass(meshes);
     }
+
+    addFloorReflection(root);
 
     await step(4);
     ground.bake(renderer, scene);

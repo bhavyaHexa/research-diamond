@@ -2,7 +2,7 @@
 // Paths are served from public/, so they start at the site root.
 export const PATHS = {
   ring: "/assets/Ring_v1.glb",
-  bottle: "/assets/bottle-glass.glb",
+  bottle: "/assets/Glass_With_Room.glb",
   scenePreset: "/assets/scene/designer-scene.vjson",
   gemEnvironment: "/assets/scene/gem-000.hdr",
   lightmap: "/assets/scene/lightmap-r-2b.hdr",
