@@ -43,6 +43,8 @@ export interface LoadOptions {
   glass?: boolean | ((mesh: Mesh) => boolean);
   /** Name of the part to frame (a bottle in a room): the model is scaled and centred on it, and the camera orbits it. */
   focus?: string;
+  /** A bottle model to stand in the room (see loadRoom): placed on the floor, framed by the camera, and every mesh of it gets the glass material. */
+  bottle?: File;
 }
 
 export interface HexaViewer {
@@ -53,6 +55,8 @@ export interface HexaViewer {
   camera: PerspectiveCamera;
   controls: OrbitControls;
   scene: Scene;
+  /** The bottle standing in the room (null when the model on screen is not a room with a bottle). */
+  bottle: Group | null;
   /** The model on screen, or null. */
   model: { root: Group; info: ModelInfo } | null;
   /** Draw one frame (one more jittered sample). */
@@ -64,6 +68,10 @@ export interface HexaViewer {
   setTurntable(on: boolean): void;
   setResolutionScale(scale: number): void;
   loadFiles(files: File[], options?: LoadOptions): Promise<ModelInfo>;
+  /** Load a room model and stand a bottle model in it. */
+  loadRoom(roomUrl: string, bottleUrl: string, options?: LoadOptions): Promise<ModelInfo>;
+  /** Replace the bottle of the room by another model: scaled to the bottle size, put on the floor, all its meshes made glass. */
+  replaceBottle(file: File): Promise<void>;
   loadSample(options?: LoadOptions): Promise<ModelInfo>;
   /** Load a model file from a URL. `sample` keeps the file's own placement instead of fitting it (the ring). */
   loadUrl(url: string, name: string, options?: LoadOptions & { sample?: boolean }): Promise<ModelInfo>;
@@ -226,10 +234,52 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
     clearMirrors();            // the mirror image comes from the floor now, not from copies under the ground
   };
 
+  // ---- a bottle standing in a room ----
+  const BOTTLE_SIZE = 0.06;            // an uploaded bottle is scaled so its largest side is this (the room is built around a 5 cm bottle)
+  /** Height of the floor: the top of the marble meshes of the room (outside the bottle). */
+  const floorLevel = (root: Group, bottle: Group) => {
+    let top = -Infinity;
+    root.traverse((o) => {
+      const mesh = o as Mesh;
+      if (!mesh.isMesh) return;
+      for (let p: Object3D | null = mesh; p; p = p.parent) if (p === bottle) return;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      if (materials.some((m) => /calacatta/i.test(m.name))) top = Math.max(top, new Box3().setFromObject(mesh).max.y);
+    });
+    return Number.isFinite(top) ? top : new Box3().setFromObject(root).min.y;
+  };
+  /** Stand the bottle on the floor at the middle of the room's reference point; `fit` scales it to BOTTLE_SIZE first. Needs the room at its own scale. */
+  const placeBottle = (root: Group, bottle: Group, fit: boolean) => {
+    root.updateMatrixWorld(true);
+    const floor = floorLevel(root, bottle);
+    bottle.position.set(0, 0, 0);
+    bottle.scale.set(1, 1, 1);
+    bottle.updateMatrixWorld(true);
+    const box = new Box3().setFromObject(bottle);
+    if (fit) {
+      const size = box.getSize(new Vector3());
+      bottle.scale.setScalar(BOTTLE_SIZE / Math.max(size.x, size.y, size.z, 1e-6));
+      bottle.updateMatrixWorld(true);
+      box.setFromObject(bottle);
+    }
+    const centre = box.getCenter(new Vector3());
+    bottle.position.set(-centre.x, floor - box.min.y, -centre.z);
+    bottle.updateMatrixWorld(true);
+  };
+  const addBottle = async (root: Group, file: File, fit: boolean) => {
+    const { root: bottle } = await readModel([file]);
+    bottle.name = "bottle";
+    root.add(bottle);
+    placeBottle(root, bottle, fit);
+    return bottle;
+  };
+  const meshesOf = (group: Group) => { const out: Mesh[] = []; group.traverse((o) => { if ((o as Mesh).isMesh) out.push(o as Mesh); }); return out; };
+
   const removeCurrent = () => {
     if (viewer.sceneReflections) viewer.setSceneReflections(false);   // the cubemap belongs to the old scene
     clearMirrors();
     removeFloorReflection();
+    viewer.bottle = null;
     if (!current) return;
     scene.remove(current.root);
     disposeModel(current.root);
@@ -247,19 +297,22 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
     removeCurrent();
     scene.add(root);
     prepareMaterials(root, jewelryMode);
+    const bottle = options.bottle ? await addBottle(root, options.bottle, false) : null;
+    viewer.bottle = bottle;
 
     await step(2);
-    const focus = options.focus ? root.getObjectByName(options.focus) ?? undefined : undefined;
+    const focus = bottle ?? (options.focus ? root.getObjectByName(options.focus) ?? undefined : undefined);
     ground.setHeight(sample ? placeSample(root) : fitToReference(root, focus));
     resetCamera();
 
-    const glassOption = options.glass;
+    const glassOption = bottle ? true : options.glass;
     if (glassOption) {
       await step(3);
+      // With a bottle in a room only the bottle is glass: every mesh of it.
       const meshes: Mesh[] = [];
-      root.traverse((o) => {
+      (bottle ?? root).traverse((o) => {
         const mesh = o as Mesh;
-        if (mesh.isMesh && (glassOption === true || (typeof glassOption === "function" && glassOption(mesh)))) meshes.push(mesh);
+        if (mesh.isMesh && (bottle || glassOption === true || (typeof glassOption === "function" && glassOption(mesh)))) meshes.push(mesh);
       });
       viewer.applyGlass(meshes);
     }
@@ -294,7 +347,7 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
   };
 
   const viewer: HexaViewer = {
-    renderer, ground, envMode, pipeline, camera, controls, scene, model: null,
+    renderer, ground, envMode, pipeline, camera, controls, scene, model: null, bottle: null,
     tick() {
       applyEnvironmentRotation();
       if (controls.autoRotate) controls.update();
@@ -323,6 +376,35 @@ export async function startHexaViewer(canvas: HTMLCanvasElement): Promise<HexaVi
       const response = await fetch(url);
       if (!response.ok) throw new Error(`${name} could not be loaded.`);
       return show([new File([await response.blob()], name)], sample, options);
+    },
+    async loadRoom(roomUrl, bottleUrl, options = {}) {
+      const [room, bottle] = await Promise.all([roomUrl, bottleUrl].map(async (url) => {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`${url} could not be loaded.`);
+        return new File([await response.blob()], url.split("/").pop() ?? "model.glb");
+      }));
+      return show([room], false, { ...options, bottle });
+    },
+    async replaceBottle(file) {
+      if (!current || !viewer.bottle) throw new Error("Load a room first.");
+      const root = current.root;
+      const sceneLight = viewer.sceneReflections;
+      if (sceneLight) viewer.setSceneReflections(false);
+      clearMirrors();
+      root.remove(viewer.bottle);
+      disposeModel(viewer.bottle as Group);
+      // The room was scaled and moved to frame the old bottle: back to its own scale, place the new bottle, frame it.
+      root.scale.set(1, 1, 1);
+      root.position.set(0, 0, 0);
+      const bottle = await addBottle(root, file, true);
+      viewer.bottle = bottle;
+      ground.setHeight(fitToReference(root, bottle));
+      viewer.applyGlass(meshesOf(bottle));
+      if (floorReflection) { floorReflection.planeY = ground.height; clearMirrors(); }
+      ground.bake(renderer, scene);
+      Object.assign(current.info, measureModel(root));
+      if (sceneLight) viewer.setSceneReflections(true);
+      pipeline.restart();
     },
     async setJewelryMode(on) {
       if (!current) return;

@@ -132,7 +132,8 @@ export function mountUi(app: HTMLElement) {
 
   const fileInput = Object.assign(document.createElement("input"), { type: "file", multiple: true, accept: ".glb,.gltf,.bin,.png,.jpg,.jpeg,.webp,.ktx2", hidden: true });
   const hdrInput = Object.assign(document.createElement("input"), { type: "file", accept: ".hdr,.exr", hidden: true });
-  app.append(fileInput, hdrInput);
+  const bottleInput = Object.assign(document.createElement("input"), { type: "file", accept: ".glb,.gltf", hidden: true });
+  app.append(fileInput, hdrInput, bottleInput);
 
   // ---------- sliders and switches ----------
   const restart = () => viewer.pipeline.restart();
@@ -235,6 +236,7 @@ export function mountUi(app: HTMLElement) {
 
   const renderScene = () => {
     $("#pane-scene").innerHTML = `
+      ${viewer.bottle ? `<div class="card"><h3>Bottle</h3><div class="val-row"><span>Every mesh of the model you choose becomes glass</span><button class="btn" data-action="bottle-replace">Replace bottle</button></div></div>` : ""}
       <div class="card"><h3>Materials <span style="font-weight:400;color:var(--muted);font-size:12px">${viewer.model ? `${viewer.model.info.meshes} meshes` : ""}</span></h3>
         <div>${groups.map((g) => `<div class="mat-row" role="button" tabindex="0" data-action="select" data-key="${g.key}" aria-current="${g === selected}">
           <span class="sw-dot" style="background:${swatch(g)}"></span><span class="name">${esc(g.name)}${g.meshes.length > 1 ? ` ×${g.meshes.length}` : ""}</span><span class="tag">${g.tag}</span>
@@ -326,6 +328,7 @@ export function mountUi(app: HTMLElement) {
   // ---------- events ----------
   const actions: Record<string, (el: HTMLElement) => void | Promise<void>> = {
     browse: () => fileInput.click(),
+    "bottle-replace": () => bottleInput.click(),
     sample: () => run((onStep) => viewer.loadSample({ onStep })),
     link: () => { const row = $("#link-row"); row.hidden = !row.hidden; if (!row.hidden) $<HTMLInputElement>("#link-input").focus(); },
     "load-link": () => run(async (onStep) => {
@@ -438,6 +441,11 @@ export function mountUi(app: HTMLElement) {
       renderScene();
     }
   });
+  bottleInput.addEventListener("change", () => {
+    const file = bottleInput.files?.[0];
+    bottleInput.value = "";
+    if (file) void run(async () => { await viewer.replaceBottle(file); return viewer.model!.info; });
+  });
   fileInput.addEventListener("change", () => { if (fileInput.files?.length) void loadFiles([...fileInput.files]); fileInput.value = ""; });
   hdrInput.addEventListener("change", async () => {
     const file = hdrInput.files?.[0];
@@ -495,7 +503,7 @@ export function mountUi(app: HTMLElement) {
     loadSample: () => run((onStep) => viewer.loadSample({ onStep })),
     /** The page's default model: the perfume bottle, with glass applied. */
     loadDefault: async () => {
-      await run((onStep) => viewer.loadUrl(PATHS.bottle, "Glass_With_Room.glb", { onStep, glass: (mesh) => mesh.name === "bottle_glass", focus: "bottle_glass" }));
+      await run((onStep) => viewer.loadRoom(PATHS.room, PATHS.bottle, { onStep }));
       // A product-shot view: the camera a little above the bottle, so the base and the neck opening show as ellipses.
       viewer.controls.minDistance = 0;
       viewer.camera.position.set(0, 3.2, 10.2);
